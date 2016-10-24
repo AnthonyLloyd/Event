@@ -28,6 +28,8 @@
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="ID.fs" />
     <Compile Include="Model.fs" />
+    <Compile Include="UI.fs" />
+    <Compile Include="VenueApp.fs" />
   </ItemGroup>
   <PropertyGroup>
     <MinimumVisualStudioVersion Condition="'$(MinimumVisualStudioVersion)' == ''">11</MinimumVisualStudioVersion>
