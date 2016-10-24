@@ -52,10 +52,17 @@ module UI =
     let text text = {UI=Text text;Event=ignore}
     
     /// Returns a text Input UI component.
-    let input text = 
+    let input text =
         let ev = ref ignore |> ref
-        let ui = {UI=Input(text,ev);Event=ignore}
-        let raise a = ui.Event a
+        let ui = {UI=Input(Option.toObj text,ev);Event=ignore}
+        let raise a = ui.Event <| if System.String.IsNullOrWhiteSpace a then None else Some a
+        (!ev):=raise
+        ui
+
+    let inputUInt16 (i:uint16 option) =
+        let ev = ref ignore |> ref
+        let ui = {UI=Input(Option.map string i |> Option.toObj,ev);Event=ignore}
+        let raise a = ui.Event <| match System.UInt16.TryParse a with | true,v -> Some v | _ -> None
         (!ev):=raise
         ui
 

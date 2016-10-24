@@ -36,3 +36,7 @@ type 'Aggregate InMemoryStore() =
                 observers |> List.iter (fun ob -> ob.OnNext e)
                 true
             | _ -> false
+
+type 'Aggregate IRoot =
+    inherit IObservable<EventID * 'Aggregate list>
+    abstract member TryPersist : 'Aggregate list * lastEventID:EventID -> bool
