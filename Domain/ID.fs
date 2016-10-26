@@ -2,6 +2,30 @@
 
 open System
 
+type Result<'o,'e> =
+    | Ok of 'o
+    | Error of 'e
+
+[<AutoOpen>][<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+module Result =
+    let map f r = match r with | Ok x -> Ok (f x) | Error e -> Error e
+    let bind binder r = match r with |Ok i -> binder i |Error e -> Error e
+    let apply f x =
+        match f,x with
+        | Ok f, Ok v -> Ok (f v)
+        | Error f, Ok _ -> Error f
+        | Ok _, Error f -> Error [f]
+        | Error f1, Error f2 -> Error (f2::f1)
+    let (<*>) = apply
+    let ofOption format =
+        let sb = System.Text.StringBuilder()
+        Printf.kbprintf (fun ()->function |Some x -> Ok x |None -> sb.ToString() |> Error) sb format
+    type AttemptBuilder() =
+        member __.Bind(v,f) = bind f v
+        member __.Return v = Ok v
+        member __.ReturnFrom o = o
+    let attempt = AttemptBuilder()
+
 type EventID = {Time:DateTime;User:int}
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
