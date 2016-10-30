@@ -31,6 +31,8 @@ type EventID = {Time:DateTime;User:int}
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module EventID =
     let create time user = {Time=time;User=user}
+    let time e = e.Time
+    let User e = e.User
 
 type 'Aggregate ID = Created of EventID
 
@@ -43,6 +45,10 @@ type 'a SetEvent =
 type 'Aggregate IStore =
     inherit IObservable<'Aggregate LogEntry>
     abstract member TryPersist : 'Aggregate LogEntry * lastEventID:EventID -> bool
+// Need to filter by datetime, aid, field
+
+module Test =
+    let xx (a:#IStore<_>) = a :> IStore<_>
 
 type 'Aggregate InMemoryStore() =
     static let mutable observers = []

@@ -1,60 +1,61 @@
 ﻿namespace Lloyd.Domain.UI
 
-open System
-open Lloyd.Domain
-open Lloyd.Domain.Model
 
+module EditorApp =
+    type 'a Model = {Label:string; Original:'a option; Update:'a option; Edit:'a option}
 
-type 'a Edit = {Original:'a option;Updated:'a option;Edited:'a option}
+    let init label original =
+        {Label=label+":"; Original=original; Update=None; Edit=None}
 
-module Edit =
-    let init a = {Original=a;Updated=None;Edited=None}
-    let updateEdited a e = {Original=e.Original;Updated=e.Updated;Edited=a}
-    let puree (f:'a->'b) = {Original=Some f;Updated=Some f;Edited=Some f}
-    let apply f a =
-        let optionApply f a = match f,a with | Some f,Some a -> f a |> Some | _ -> None
-        {Original=optionApply f.Original a.Original; Updated=optionApply f.Updated a.Updated; Edited=optionApply f.Edited a.Edited}
-    let map f a = {Original=Option.map f a.Original; Updated=Option.map f a.Updated; Edited=Option.map f a.Edited}
+    type 'a Msg =
+        | Reset
+        | Update of 'a option
+        | Edit of 'a option
+        
+    let update msg model =
+        match msg with
+        | Reset -> {model with Edit=None}
+        | Update u -> {model with Update=u; Edit=if u=model.Edit then None else model.Edit}
+        | Edit e -> {model with Edit=e}
 
-type VenueState = {Name:string; Capacity:uint16}
+    let view inputUI model =
+        let currentValue = List.tryPick id [model.Edit; model.Update; model.Original] // TODO: Option method
+        UI.div Vertical [
+            UI.text model.Label
+            inputUI currentValue |> UI.map Edit
+        ]
 
-[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module Venue =
-    let parse (s:Venue list) =
-        Ok (fun n s -> {Name=n;Capacity=s})
-        <*> (List.tryPick (function |Venue.Name n -> Some n |_ -> None) s |> ofOption "Name")
-        <*> (List.tryPick (function |Capacity n -> Some n |_ -> None) s |> ofOption "Capacity")
+    let app inputUI label original =
+        UI.app (fun () -> init label original) update (view inputUI) // TODO: tooltip, coloured border, lots of input editors for types, rightclick reset
 
-    let test = Edit.puree (fun s c -> {Name=s;Capacity=c})
 module VenueApp =
-    
-    type Model =
-        {
-            Name: string Edit
-            Capacity: uint16 Edit
-        }
+    type Model = {Name: string EditorApp.Model; Capacity: uint16 EditorApp.Model}
 
-    let init (store:Venue IRoot) =
-        store :> IObservable<_> |> Observable.subscribe ignore |> ignore
-        {Name=Edit.init None;Capacity=Edit.init None}
+    let init name capacity =
+        {Name=EditorApp.init "Name" name;Capacity=EditorApp.init "Capacity" capacity},ignore
 
     type Msg =
-        | Name of string option
-        | Capacity of uint16 option
+        | NameMsg of string EditorApp.Msg
+        | CapacityMsg of uint16 EditorApp.Msg
         | Save
 
-    let update msg (model:Model) =
+    let update msg model =
         match msg with
-        | Name s -> {model with Name=Edit.updateEdited s model.Name}
-        | Capacity e -> {model with Capacity=Edit.updateEdited e model.Capacity}
-        | Save -> model
+        | NameMsg n -> {model with Name=EditorApp.update n model.Name},ignore
+        | CapacityMsg c -> {model with Capacity=EditorApp.update c model.Capacity},ignore
+        | Save -> model,ignore
+
+    let subscription model =
+        Set.empty
 
     let view model =
         UI.div Vertical [
-            UI.input model.Name.Edited |> UI.map Name
-            UI.inputUInt16 model.Capacity.Edited |> UI.map Capacity
+            UI.div Horizontal [
+                EditorApp.view UI.input model.Name |> UI.map NameMsg
+                EditorApp.view UI.inputUInt16 model.Capacity |> UI.map CapacityMsg
+            ]
             UI.button "Save" Save
         ]
 
-    let app s =
-        UI.app (init s) update view
+    let app name capacity =
+        UI.appWithCmdSub (fun () -> init name capacity) update view subscription (failwith "no imp")

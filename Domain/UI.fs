@@ -1,5 +1,7 @@
 ﻿namespace Lloyd.Domain.UI
 
+open System
+
 /// Message event used on the primative UI components.
 type 'msg Event = ('msg->unit) ref ref
 
@@ -29,7 +31,14 @@ type 'msg UI = {UI:UI;mutable Event:'msg->unit}
 
 /// UI application.
 [<NoEquality;NoComparison>]
-type App<'msg,'model> = {Model:'model;Update:'msg->'model->'model;View:'model->'msg UI}
+type App<'msg,'model,'sub when 'sub : comparison> =
+    {
+        Init: unit -> 'model*(unit->unit)
+        Update: 'msg -> 'model->'model*(unit->unit)
+        View: 'model -> 'msg UI
+        Subs: 'model -> Set<'sub>
+        Subscribe: 'sub ->IObservable<'msg>
+    }
 
 /// Native UI interface.
 type INativeUI =
@@ -109,21 +118,45 @@ module UI =
             |_,_ -> ReplaceUI(index::path,ui2)::diffs
         diff ui1.UI ui2.UI [] 0 []
 
-    /// Returns a UI application from a UI model, update and view.
-    let app model update view = {Model=model;Update=update;View=view}
+    /// Returns a UI application from a UI init, update and view.
+    let app init update view = {Init=(fun () ->init(),ignore);Update=(fun msg model -> update msg model,ignore);View=view;Subs=(fun _ -> Set.empty);Subscribe=failwith "none"}
+
+    let appWithCmdSub init update view subs subscribe = {Init=init;Update=update;View=view;Subs=subs;Subscribe=subscribe}
 
     let private remapEvents l = List.iter (function |EventUI f -> f() |_-> ()) l
     
 
+    let mapUpdate (create:'k->'v) (onRemove:'v->unit) (set:Set<'k>) (map:Map<'k,'v>) : Map<'k,'v> =
+        let eSet = (Set.toSeq set).GetEnumerator()
+        let eMap = (Map.toSeq map).GetEnumerator()
+//        let rec loop newMap =
+//            match eSet.MoveNext(),eMap.MoveNext() with
+//            | false,false -> newMap
+//            | true.true
+//        loop map
+        failwith "hi"
+
     /// Runs a UI application given a native UI.
     let run (nativeUI:INativeUI) app =
-        let rec handle model ui msg =
-            let newModel = app.Update msg model
-            let newUI = app.View newModel
-            newUI.Event<-handle newModel newUI
-            let diff = diff ui newUI
-            remapEvents diff
-            nativeUI.Send diff
-        let ui = app.View app.Model
-        ui.Event<-handle app.Model ui
-        nativeUI.Send [InsertUI([],ui.UI)]
+        MailboxProcessor.Start(fun mb ->
+            let rec loop (model,ui,subs) =
+                async {
+                    let! msg = mb.Receive()
+                    let model,cmd = app.Update msg model
+                    cmd()
+                    let newUI = app.View model
+                    newUI.Event<-mb.Post
+                    let subs = mapUpdate (app.Subscribe >> Observable.subscribe mb.Post) (fun d -> d.Dispose()) (app.Subs model) subs
+                    let diff = diff ui newUI
+                    remapEvents diff
+                    nativeUI.Send diff
+                    return! loop (model,newUI,subs)
+                }
+            let model,cmd = app.Init()
+            cmd()
+            let ui = app.View model
+            ui.Event<-mb.Post
+            let subs = app.Subs model |> Seq.map  (fun s -> s,app.Subscribe s |> Observable.subscribe mb.Post) |> Map.ofSeq
+            nativeUI.Send [InsertUI([],ui.UI)]
+            loop (model,ui,subs)
+        )
