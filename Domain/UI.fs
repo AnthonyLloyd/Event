@@ -1,6 +1,7 @@
 ﻿namespace Lloyd.Domain.UI
 
 open System
+open Lloyd.Domain
 
 /// Message event used on the primative UI components.
 type 'msg Event = ('msg->unit) ref ref
@@ -124,17 +125,6 @@ module UI =
     let appWithCmdSub init update view subs subscribe = {Init=init;Update=update;View=view;Subs=subs;Subscribe=subscribe}
 
     let private remapEvents l = List.iter (function |EventUI f -> f() |_-> ()) l
-    
-
-    let mapUpdate (create:'k->'v) (onRemove:'v->unit) (set:Set<'k>) (map:Map<'k,'v>) : Map<'k,'v> =
-        let eSet = (Set.toSeq set).GetEnumerator()
-        let eMap = (Map.toSeq map).GetEnumerator()
-//        let rec loop newMap =
-//            match eSet.MoveNext(),eMap.MoveNext() with
-//            | false,false -> newMap
-//            | true.true
-//        loop map
-        failwith "hi"
 
     /// Runs a UI application given a native UI.
     let run (nativeUI:INativeUI) app =
@@ -146,7 +136,7 @@ module UI =
                     cmd()
                     let newUI = app.View model
                     newUI.Event<-mb.Post
-                    let subs = mapUpdate (app.Subscribe >> Observable.subscribe mb.Post) (fun d -> d.Dispose()) (app.Subs model) subs
+                    let subs = Map.updateFromKeys (app.Subscribe >> Observable.subscribe mb.Post) (fun d -> d.Dispose()) (app.Subs model) subs
                     let diff = diff ui newUI
                     remapEvents diff
                     nativeUI.Send diff
