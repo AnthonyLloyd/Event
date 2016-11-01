@@ -3,6 +3,12 @@
 open System
 open Lloyd.Domain
 
+
+type 'a SetEvent =
+    | Add of 'a
+    | Remove of 'a
+
+
 type Person =
     | Name of string
 

@@ -37,8 +37,8 @@ type App<'msg,'model,'sub when 'sub : comparison> =
         Init: unit -> 'model*(unit->unit)
         Update: 'msg -> 'model->'model*(unit->unit)
         View: 'model -> 'msg UI
-        Subs: 'model -> Set<'sub>
-        Subscribe: 'sub ->IObservable<'msg>
+        Subscription: 'model -> Set<'sub>
+        Observable: 'sub ->IObservable<'msg>
     }
 
 /// Native UI interface.
@@ -120,9 +120,9 @@ module UI =
         diff ui1.UI ui2.UI [] 0 []
 
     /// Returns a UI application from a UI init, update and view.
-    let app init update view = {Init=(fun () ->init(),ignore);Update=(fun msg model -> update msg model,ignore);View=view;Subs=(fun _ -> Set.empty);Subscribe=failwith "none"}
+    let app init update view = {Init=(fun () ->init(),ignore);Update=(fun msg model -> update msg model,ignore);View=view;Subscription=(fun _ -> Set.empty);Observable=failwith "none"}
 
-    let appWithCmdSub init update view subs subscribe = {Init=init;Update=update;View=view;Subs=subs;Subscribe=subscribe}
+    let appWithCmdSub init update view subscription observable = {Init=init;Update=update;View=view;Subscription=subscription;Observable=observable}
 
     let private remapEvents l = List.iter (function |EventUI f -> f() |_-> ()) l
 
@@ -136,7 +136,7 @@ module UI =
                     cmd()
                     let newUI = app.View model
                     newUI.Event<-mb.Post
-                    let subs = Map.updateFromKeys (app.Subscribe >> Observable.subscribe mb.Post) (fun d -> d.Dispose()) (app.Subs model) subs
+                    let subs = Map.updateFromKeys (app.Observable >> Observable.subscribe mb.Post) (fun d -> d.Dispose()) (app.Subscription model) subs
                     let diff = diff ui newUI
                     remapEvents diff
                     nativeUI.Send diff
@@ -146,7 +146,7 @@ module UI =
             cmd()
             let ui = app.View model
             ui.Event<-mb.Post
-            let subs = app.Subs model |> Seq.map  (fun s -> s,app.Subscribe s |> Observable.subscribe mb.Post) |> Map.ofSeq
+            let subs = app.Subscription model |> Seq.map  (fun s -> s,app.Observable s |> Observable.subscribe mb.Post) |> Map.ofSeq
             nativeUI.Send [InsertUI([],ui.UI)]
             loop (model,ui,subs)
         )

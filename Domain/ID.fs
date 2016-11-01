@@ -13,31 +13,32 @@ module EventID =
 
 type 'Aggregate ID = Created of EventID
 
+module ID =
+    let gen() = EventID.gen() |> Created
+
 type 'Aggregate EventUpdate = 'Aggregate ID * (EventID * 'Aggregate list) list
 
 [<NoEquality;NoComparison>]
-type private 'Aggregate MemoryStoreData =
+type 'Aggregate MemoryStore =
     {
         Updates: Map<'Aggregate ID,(EventID * 'Aggregate list) list>
         Observers: IObserver<'Aggregate EventUpdate> list
     }
 
-[<NoEquality;NoComparison>]
-type 'Aggregate MemoryStore = private {Inner: 'Aggregate MemoryStoreData ref}
-
 module MemoryStore =
-    let observable (store:'Aggregate MemoryStore) =
+    let create() = {Updates=Map.empty; Observers=[]}
+    let observable (store:'Aggregate MemoryStore ref) =
         {new IObservable<'Aggregate EventUpdate> with
             member __.Subscribe(ob:IObserver<'Aggregate EventUpdate>) =
-                let msd = atomicUpdate store.Inner (fun i -> {Updates=i.Updates; Observers=ob::i.Observers})
+                let msd = atomicUpdate store (fun i -> {Updates=i.Updates; Observers=ob::i.Observers})
                 Map.toSeq msd.Updates |> Seq.iter ob.OnNext
                 {new IDisposable with
                     member __.Dispose() =
-                        atomicUpdate store.Inner (fun i -> {Updates=i.Updates; Observers=List.where ((<>)ob) i.Observers}) |> ignore
+                        atomicUpdate store (fun i -> {Updates=i.Updates; Observers=List.where ((<>)ob) i.Observers}) |> ignore
                 }
         }
-    let update (aid:'Aggregate ID) (updates:'Aggregate list) (lastEvent:EventID) (store:'Aggregate MemoryStore) =
-        atomicUpdateWithQuery store.Inner (fun i ->
+    let update (aid:'Aggregate ID) (updates:'Aggregate list) (lastEvent:EventID) (store:'Aggregate MemoryStore ref) =
+        atomicUpdateWithQuery store (fun i ->
             match Map.tryFind aid i.Updates with
             | Some l ->
                 if List.head l |> fst = lastEvent then i,None
@@ -48,7 +49,3 @@ module MemoryStore =
                 let eid = EventID.gen()
                 {Updates=Map.add aid [eid,updates] i.Updates; Observers=i.Observers}, Some eid
         )
-
-type 'a SetEvent =
-    | Add of 'a
-    | Remove of 'a

@@ -31,6 +31,7 @@
     <Compile Include="Model.fs" />
     <Compile Include="UI.fs" />
     <Compile Include="VenueApp.fs" />
+    <Compile Include="Main.fs" />
   </ItemGroup>
   <PropertyGroup>
     <MinimumVisualStudioVersion Condition="'$(MinimumVisualStudioVersion)' == ''">11</MinimumVisualStudioVersion>
