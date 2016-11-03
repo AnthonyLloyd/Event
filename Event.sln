@@ -5,6 +5,8 @@ VisualStudioVersion = 14.0.25420.1
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Domain", "Domain\Domain.fsproj", "{2265DAEF-2C4D-4098-BF33-2C3D2BCDAADB}"
 EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "WPF", "WPF\WPF.fsproj", "{0E894609-275E-41CE-9F28-70051F217CF6}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -15,6 +17,10 @@ Global
 		{2265DAEF-2C4D-4098-BF33-2C3D2BCDAADB}.Debug|x64.Build.0 = Debug|x64
 		{2265DAEF-2C4D-4098-BF33-2C3D2BCDAADB}.Release|x64.ActiveCfg = Release|x64
 		{2265DAEF-2C4D-4098-BF33-2C3D2BCDAADB}.Release|x64.Build.0 = Release|x64
+		{0E894609-275E-41CE-9F28-70051F217CF6}.Debug|x64.ActiveCfg = Debug|x64
+		{0E894609-275E-41CE-9F28-70051F217CF6}.Debug|x64.Build.0 = Debug|x64
+		{0E894609-275E-41CE-9F28-70051F217CF6}.Release|x64.ActiveCfg = Release|x64
+		{0E894609-275E-41CE-9F28-70051F217CF6}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

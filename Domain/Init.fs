@@ -40,12 +40,14 @@ module Threading =
         let rec update() =
             let o = !state
             let o',result = f o
-            if Interlocked.CompareExchange<_>(state, o', o) |> LanguagePrimitives.PhysicalEquality o then result
+            if Interlocked.CompareExchange<_>(state, o', o) |> LanguagePrimitives.PhysicalEquality o then o',result
             else update()
         update()
 
 module Option =
-    let orTry o1 o2 = match o2 with | None -> o1 | some -> some
+    let getElse v o = match o with | Some i -> i | None -> v
+    let orTry a o = match o with | None -> a | some -> some
+
 
 module List =
     let tryCons o xs = match o with |None -> xs | Some x -> x::xs

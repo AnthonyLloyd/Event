@@ -53,6 +53,7 @@ module Venue =
         | Save
 
     let update msg model =
+        printfn "Venue.update: %A" msg
         match msg with
         | Update l -> {model with
                         Name = Editor.updateProperty Query.Venue.name l model.Name

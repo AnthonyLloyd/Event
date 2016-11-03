@@ -2,14 +2,14 @@
 
 open System
 
-type EventID = {Time:DateTime; User:int}
+type EventID = EventID of DateTime*string
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module EventID =
-    let create time user = {Time=time; User=user}
-    let time e = e.Time
-    let User e = e.User
-    let gen() = {Time=DateTime.UtcNow; User=1}
+    let create time user = EventID(time,user)
+    let time (EventID(t,_)) = t
+    let User (EventID(_,u)) = u
+    let gen() = EventID(DateTime.UtcNow,"Ant")
 
 type 'Aggregate ID = Created of EventID
 
@@ -19,17 +19,13 @@ module ID =
 type 'Aggregate EventUpdate = (EventID * 'Aggregate list) list
 
 [<NoEquality;NoComparison>]
-type 'Aggregate MemoryStore =
-    {
-        Updates: Map<'Aggregate ID,'Aggregate EventUpdate>
-        Observers: IObserver<'Aggregate ID * 'Aggregate EventUpdate> list
-    }
+type 'Aggregate MemoryStore = {Updates: Map<'Aggregate ID,'Aggregate EventUpdate>; Observers: IObserver<'Aggregate ID*'Aggregate EventUpdate> list}
 
 module MemoryStore =
     let create() = {Updates=Map.empty; Observers=[]}
-    let observable (store:'Aggregate MemoryStore ref) =
-        {new IObservable<'Aggregate ID * 'Aggregate EventUpdate> with
-            member __.Subscribe(ob:IObserver<'Aggregate ID * 'Aggregate EventUpdate>) =
+    let observable store =
+        {new IObservable<_> with
+            member __.Subscribe(ob:IObserver<_>) =
                 let msd = atomicUpdate store (fun i -> {Updates=i.Updates; Observers=ob::i.Observers})
                 Map.toSeq msd.Updates |> Seq.iter ob.OnNext
                 {new IDisposable with
@@ -37,18 +33,19 @@ module MemoryStore =
                         atomicUpdate store (fun i -> {Updates=i.Updates; Observers=List.where ((<>)ob) i.Observers}) |> ignore
                 }
         }
-    let update (aid:'Aggregate ID) (updates:'Aggregate list) (lastEvent:EventID option) (store:'Aggregate MemoryStore ref) =
-        atomicUpdateWithQuery store (fun i ->
-            match Map.tryFind aid i.Updates with
-            | Some l ->
-                if List.head l |> fst |> Some = lastEvent then i,None
-                else
+    let update (aid:'Aggregate ID) (updates:'Aggregate list) (lastEvent:EventID option) (storeRef:'Aggregate MemoryStore ref) =
+        assert(List.isEmpty updates |> not)
+        let store,oeid =
+            atomicUpdateWithQuery storeRef (fun store ->
+                match Map.tryFind aid store.Updates with
+                | Some ((eid,_)::_) when Some eid <> lastEvent -> store,None
+                | o ->
                     let eid = EventID.gen()
-                    {Updates=Map.add aid ((eid,updates)::l) i.Updates; Observers=i.Observers}, Some eid
-            | None ->
-                let eid = EventID.gen()
-                {Updates=Map.add aid [eid,updates] i.Updates; Observers=i.Observers}, Some eid
-        )
+                    printfn "MemoryStore.update: %A %A" eid updates
+                    {Updates=Map.add aid ((eid,updates)::Option.getElse [] o) store.Updates; Observers=store.Observers}, Some eid
+            )
+        if Option.isSome oeid then store.Observers |> Seq.iter (fun ob -> ob.OnNext(aid,Map.find aid store.Updates))
+        oeid
 
 [<NoEquality;NoComparison>]
 type Property<'a,'b> = {Name:string; Getter:'a->'b option; Setter:'b->'a; Default:'b}
