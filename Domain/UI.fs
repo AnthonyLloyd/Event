@@ -32,13 +32,12 @@ type 'msg UI = {UI:UI;mutable Event:'msg->unit}
 
 /// UI application.
 [<NoEquality;NoComparison>]
-type App<'msg,'model,'sub when 'sub : comparison> =
+type App<'msg,'model,'sub,'cmd when 'sub : comparison> =
     {
-        Init: unit -> 'model*(unit->unit)
-        Update: 'msg -> 'model->'model*(unit->unit)
+        Init: unit -> 'model*'cmd
+        Update: 'msg -> 'model->'model*'cmd
         View: 'model -> 'msg UI
         Subscription: 'model -> Set<'sub>
-        Observable: 'sub ->IObservable<'msg>
     }
 
 /// Native UI interface.
@@ -120,33 +119,35 @@ module UI =
         diff ui1.UI ui2.UI [] 0 []
 
     /// Returns a UI application from a UI init, update and view.
-    let app init update view = {Init=(fun () ->init(),ignore);Update=(fun msg model -> update msg model,ignore);View=view;Subscription=(fun _ -> Set.empty);Observable=failwith "none"}
+    let appSimple init update view = {Init=(fun () ->init(),());Update=(fun msg model -> update msg model,());View=view;Subscription=(fun _ -> Set.empty)}
 
-    let appWithCmdSub init update view subscription observable = {Init=init;Update=update;View=view;Subscription=subscription;Observable=observable}
+    let appFull init update view subscription = {Init=init;Update=update;View=view;Subscription=subscription}
 
     let private remapEvents l = List.iter (function |EventUI f -> f() |_-> ()) l
 
+    //Observable: 'sub ->IObservable<'msg>
+
     /// Runs a UI application given a native UI.
-    let run (nativeUI:INativeUI) app =
+    let run (nativeUI:INativeUI) app subscriptionHandler commandHandler =
         MailboxProcessor.Start(fun mb ->
-            let rec loop (model,ui,subs) =
+            let rec loop model ui subs =
                 async {
                     let! msg = mb.Receive()
                     let model,cmd = app.Update msg model
-                    cmd()
+                    let subs = Map.updateFromKeys (subscriptionHandler >> Observable.subscribe mb.Post) (fun d -> d.Dispose()) (app.Subscription model) subs
+                    Option.iter commandHandler cmd
                     let newUI = app.View model
                     newUI.Event<-mb.Post
-                    let subs = Map.updateFromKeys (app.Observable >> Observable.subscribe mb.Post) (fun d -> d.Dispose()) (app.Subscription model) subs
                     let diff = diff ui newUI
                     remapEvents diff
                     nativeUI.Send diff
-                    return! loop (model,newUI,subs)
+                    return! loop model newUI subs
                 }
             let model,cmd = app.Init()
-            cmd()
+            let subs = app.Subscription model |> Seq.map  (fun s -> s,subscriptionHandler s |> Observable.subscribe mb.Post) |> Map.ofSeq
+            Option.iter commandHandler cmd
             let ui = app.View model
             ui.Event<-mb.Post
-            let subs = app.Subscription model |> Seq.map  (fun s -> s,app.Observable s |> Observable.subscribe mb.Post) |> Map.ofSeq
             nativeUI.Send [InsertUI([],ui.UI)]
-            loop (model,ui,subs)
-        )
+            loop model ui subs
+        ) |> ignore

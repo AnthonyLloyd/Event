@@ -6,8 +6,8 @@ open Lloyd.Domain.UI
 module Editor =
     type 'a Model = {Label:string; Previous:(EventID * 'a) option; Latest:(EventID * 'a) option; Edit:'a option}
 
-    let init label =
-        {Label=label+":"; Previous=None; Latest=None; Edit=None}
+    let init property =
+        {Label=property.Name+":"; Previous=None; Latest=None; Edit=None}
 
     type 'a Msg =
         | Reset
@@ -18,33 +18,33 @@ module Editor =
         match msg with
         | Edit e -> {model with Edit=e}
         | Reset -> {model with Edit=None}
-        | Update (latest::tail) -> {model with Previous= match tail with |previous::_ -> Some previous | [] -> model.Latest
-                                               Latest=Some latest
-                                               Edit=if model.Edit=Some(snd latest) then None else model.Edit
-                                   }
+        | Update (latest::tail) ->
+            {model with
+                Previous = List.tryHead tail |> Option.orTry model.Latest
+                Latest = Some latest
+                Edit = if model.Edit=Some(snd latest) then None else model.Edit
+            }
         | Update [] -> model
 
-    let updateChoose chooser msg model =
-        let msg = List.choose (fun (e,l) -> List.tryPick chooser l |> Option.map (fun i -> e,i)) msg |> Update
-        update msg model
-
+    let updateProperty property msg model =
+        update (Property.getUpdate property msg |> Update) model
+        
     let view inputUI model =
-        let currentValue = match model.Edit with | Some v -> Some v | None -> Option.map snd model.Latest
+        let currentValue = model.Edit |> Option.orTry (Option.map snd model.Latest)
         UI.div Vertical [
             UI.text model.Label
             inputUI currentValue |> UI.map Edit
         ]
 
-    let app inputUI label =
-        UI.app (fun () -> init label) update (view inputUI) // TODO: tooltip, coloured border, lots of input editors for types, rightclick reset
+    let app inputUI property = UI.appSimple (fun () -> init property) update (view inputUI) // TODO: tooltip, coloured border, lots of input editors for types, rightclick reset
 
 open Lloyd.Domain.Model
 
 module Venue =
-    type Model = {Name: string Editor.Model; Capacity: uint16 Editor.Model}
+    type Model = {Name: string Editor.Model; Capacity: uint16 Editor.Model; LastEvent: EventID option}
 
     let init() =
-        {Name=Editor.init "Name";Capacity=Editor.init "Capacity"},ignore
+        {Name=Editor.init Query.Venue.name; Capacity=Editor.init Query.Venue.capacity; LastEvent=None},None
 
     type Msg =
         | Update of (EventID * Venue list) list
@@ -54,11 +54,18 @@ module Venue =
 
     let update msg model =
         match msg with
-        | Update l -> {model with Name=Editor.updateChoose (function |Venue.Name n -> Some n | _ -> None) l model.Name
-                                  Capacity=Editor.updateChoose (function |Venue.Capacity c -> Some c | _ -> None) l model.Capacity},ignore
-        | NameMsg n -> {model with Name=Editor.update n model.Name},ignore
-        | CapacityMsg c -> {model with Capacity=Editor.update c model.Capacity},ignore
-        | Save -> model,ignore
+        | Update l -> {model with
+                        Name = Editor.updateProperty Query.Venue.name l model.Name
+                        Capacity = Editor.updateProperty Query.Venue.capacity l model.Capacity
+                        LastEvent = List.tryHead l |> Option.map fst |> Option.orTry model.LastEvent
+                      },None
+        | NameMsg n -> {model with Name=Editor.update n model.Name},None
+        | CapacityMsg c -> {model with Capacity=Editor.update c model.Capacity},None
+        | Save ->
+            let cmd =
+                List.tryCons (Option.map (Property.set Query.Venue.name) model.Name.Edit) []
+                |> List.tryCons (Option.map (Property.set Query.Venue.capacity) model.Capacity.Edit)
+            model,Some(model.LastEvent,cmd)
 
     let subscription _ =
         Set.singleton ()
@@ -70,5 +77,4 @@ module Venue =
             UI.button "Save" Save
         ]
 
-    let app observable =
-        UI.appWithCmdSub init update view subscription observable
+    let app() = UI.appFull init update view subscription

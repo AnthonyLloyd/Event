@@ -44,6 +44,11 @@ module Threading =
             else update()
         update()
 
+module Option =
+    let orTry o1 o2 = match o2 with | None -> o1 | some -> some
+
+module List =
+    let tryCons o xs = match o with |None -> xs | Some x -> x::xs
 
 module Map =
     let updateFromKeys create onRemove keys existing =
