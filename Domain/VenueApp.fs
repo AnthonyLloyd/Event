@@ -1,7 +1,7 @@
 ﻿namespace Lloyd.Domain.Apps
 
 open Lloyd.Domain
-open Lloyd.Domain.UI
+open Lloyd.Core.UI
 
 module Editor =
     type 'a Model = {Label:string; Previous:(EventID * 'a) option; Latest:(EventID * 'a) option; Edit:'a option}
@@ -18,13 +18,13 @@ module Editor =
         match msg with
         | Edit e -> {model with Edit=e}
         | Reset -> {model with Edit=None}
-        | Update (latest::tail) ->
+        | Update l ->
+            let latest,previous = match l with |[] -> None,None |[l] -> Some l,None |l::p::_ -> Some l,Some p
             {model with
-                Previous = List.tryHead tail |> Option.orTry model.Latest
-                Latest = Some latest
-                Edit = if model.Edit=Some(snd latest) then None else model.Edit
+                Previous = previous
+                Latest = latest
+                Edit = if model.Edit=Option.map snd latest then None else model.Edit
             }
-        | Update [] -> model
 
     let updateProperty property msg model =
         update (Property.getUpdate property msg |> Update) model
@@ -44,7 +44,7 @@ module Venue =
     type Model = {Name: string Editor.Model; Capacity: uint16 Editor.Model; LastEvent: EventID option}
 
     let init() =
-        {Name=Editor.init Query.Venue.name; Capacity=Editor.init Query.Venue.capacity; LastEvent=None},None
+        {Name=Editor.init Query.Venue.name; Capacity=Editor.init Query.Venue.capacity; LastEvent=None}, None
 
     type Msg =
         | Update of (EventID * Venue list) list
@@ -59,14 +59,14 @@ module Venue =
                         Name = Editor.updateProperty Query.Venue.name l model.Name
                         Capacity = Editor.updateProperty Query.Venue.capacity l model.Capacity
                         LastEvent = List.tryHead l |> Option.map fst |> Option.orTry model.LastEvent
-                      },None
-        | NameMsg n -> {model with Name=Editor.update n model.Name},None
-        | CapacityMsg c -> {model with Capacity=Editor.update c model.Capacity},None
+                      }, None
+        | NameMsg n -> {model with Name=Editor.update n model.Name}, None
+        | CapacityMsg c -> {model with Capacity=Editor.update c model.Capacity}, None
         | Save ->
             let cmd =
                 List.tryCons (Option.map (Property.set Query.Venue.name) model.Name.Edit) []
                 |> List.tryCons (Option.map (Property.set Query.Venue.capacity) model.Capacity.Edit)
-            model,Some(model.LastEvent,cmd)
+            model, Some(model.LastEvent,cmd)
 
     let subscription _ =
         Set.singleton ()

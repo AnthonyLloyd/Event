@@ -1,4 +1,4 @@
-﻿namespace Domain.AssemblyInfo
+﻿namespace Core.AssemblyInfo
 
 open System.Reflection
 open System.Runtime.CompilerServices
@@ -7,11 +7,11 @@ open System.Runtime.InteropServices
 // General Information about an assembly is controlled through the following 
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[<assembly: AssemblyTitle("Lloyd.Domain")>]
+[<assembly: AssemblyTitle("Lloyd.Core")>]
 [<assembly: AssemblyDescription("")>]
 [<assembly: AssemblyConfiguration("")>]
 [<assembly: AssemblyCompany("")>]
-[<assembly: AssemblyProduct("Lloyd.Domain")>]
+[<assembly: AssemblyProduct("Lloyd.Core")>]
 [<assembly: AssemblyCopyright("Copyright ©  2016")>]
 [<assembly: AssemblyTrademark("")>]
 [<assembly: AssemblyCulture("")>]
@@ -22,7 +22,7 @@ open System.Runtime.InteropServices
 [<assembly: ComVisible(false)>]
 
 // The following GUID is for the ID of the typelib if this project is exposed to COM
-[<assembly: Guid("2265daef-2c4d-4098-bf33-2c3d2bcdaadb")>]
+[<assembly: Guid("d10375b8-fdbd-482d-a6d7-52da16deae52")>]
 
 // Version information for an assembly consists of the following four values:
 // 
@@ -36,6 +36,8 @@ open System.Runtime.InteropServices
 // [<assembly: AssemblyVersion("1.0.*")>]
 [<assembly: AssemblyVersion("1.0.0.0")>]
 [<assembly: AssemblyFileVersion("1.0.0.0")>]
+
+[<assembly: AutoOpen("Lloyd.Core")>]
 
 do
     ()

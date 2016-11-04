@@ -1,7 +1,6 @@
-﻿namespace Lloyd.Domain.UI
+﻿namespace Lloyd.Core.UI
 
-open System
-open Lloyd.Domain
+open Lloyd.Core
 
 /// Message event used on the primative UI components.
 type 'msg Event = ('msg->unit) ref ref
@@ -124,8 +123,6 @@ module UI =
     let appFull init update view subscription = {Init=init;Update=update;View=view;Subscription=subscription}
 
     let private remapEvents l = List.iter (function |EventUI f -> f() |_-> ()) l
-
-    //Observable: 'sub ->IObservable<'msg>
 
     /// Runs a UI application given a native UI.
     let run (nativeUI:INativeUI) app subscriptionHandler commandHandler =

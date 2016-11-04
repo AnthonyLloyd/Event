@@ -1,8 +1,6 @@
 ﻿namespace Lloyd.Domain.Model
 
 open System
-open Lloyd.Domain
-
 
 type 'a SetEvent =
     | Add of 'a

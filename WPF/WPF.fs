@@ -2,24 +2,24 @@
 
 open System.Windows
 open System.Windows.Controls
-open Lloyd.Domain.UI
+open Lloyd.Core.UI
 
 let CreateNaiveUI (root:ContentControl) =
     
     let rec createUI ui : UIElement =
         match ui with
         |Text text ->
-            let c = Label(Content=string text)
+            let c = Label(Content=text)
             upcast c
         |Input (text,event) ->
-            let c = TextBox(Text=string text)
+            let c = TextBox(Text=text)
             let event = !event
-            c.TextChanged.Add(fun _ -> let t = c.Text in async { !event t } |> Async.Start)
+            c.TextChanged.Add(fun _ -> !event c.Text)
             upcast c
         |Button (text,event) ->
             let c = Controls.Button(Content=text)
             let event = !event
-            c.Click.Add(fun _ -> async { (!event)() } |> Async.Start)
+            c.Click.Add(fun _ -> !event ())
             upcast c
         |Div (layout,list) ->
             let children = List.map createUI list
@@ -29,9 +29,9 @@ let CreateNaiveUI (root:ContentControl) =
 
     let updateUI ui (element:UIElement) =
         match ui with
-        | Text text -> (element :?> Label).Content <- string text
-        | Input (text,_) -> (element :?> TextBox).Text <- string text
-        | Button (text,_) -> (element :?> Button).Content <- string text
+        | Text text -> (element :?> Label).Content <- text
+        | Input (text,_) -> (element :?> TextBox).Text <- text
+        | Button (text,_) -> (element :?> Button).Content <- text
         | Div _ -> failwith "updateUI not possible for div"
 
     let rec locatePanel loc : Panel =

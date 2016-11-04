@@ -1,6 +1,5 @@
-﻿namespace Lloyd.Domain
+﻿namespace Lloyd.Core
 
-open System
 open System.Threading
 
 type Result<'o,'e> =
