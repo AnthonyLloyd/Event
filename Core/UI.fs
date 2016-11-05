@@ -120,7 +120,7 @@ module UI =
     /// Returns a UI application from a UI init, update and view.
     let appSimple init update view = {Init=(fun () ->init(),());Update=(fun msg model -> update msg model,());View=view;Subscription=(fun _ -> Set.empty)}
 
-    let appFull init update view subscription = {Init=init;Update=update;View=view;Subscription=subscription}
+    let app init update view subscription = {Init=init;Update=update;View=view;Subscription=subscription}
 
     let private remapEvents l = List.iter (function |EventUI f -> f() |_-> ()) l
 

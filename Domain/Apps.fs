@@ -1,6 +1,5 @@
 ﻿namespace Lloyd.Domain.Apps
 
-open Lloyd.Domain
 open Lloyd.Core.UI
 
 module Editor =
@@ -38,16 +37,18 @@ module Editor =
 
     let app inputUI property = UI.appSimple (fun () -> init property) update (view inputUI) // TODO: tooltip, coloured border, lots of input editors for types, rightclick reset
 
+
 open Lloyd.Domain.Model
 
+
 module Toy =
-    type Model = {Name: string Editor.Model; Effort: uint16 Editor.Model; LastEvent: EventID option}
+    type Model = {Name:string Editor.Model; WorkRequired:uint16 Editor.Model; LastEvent: EventID option}
 
     let init() =
-        {Name=Editor.init Toy.name; Effort=Editor.init Toy.effort; LastEvent=None}, None
+        {Name=Editor.init Toy.name; WorkRequired=Editor.init Toy.workRequired; LastEvent=None}, None
 
     type Msg =
-        | Update of (EventID * Toy list) list
+        | Update of Toy Events
         | NameMsg of string Editor.Msg
         | EffortMsg of uint16 Editor.Msg
         | Save
@@ -57,15 +58,15 @@ module Toy =
         match msg with
         | Update l -> {model with
                         Name = Editor.updateProperty Toy.name l model.Name
-                        Effort = Editor.updateProperty Toy.effort l model.Effort
+                        WorkRequired = Editor.updateProperty Toy.workRequired l model.WorkRequired
                         LastEvent = List.tryHead l |> Option.map fst |> Option.orTry model.LastEvent
                       }, None
         | NameMsg n -> {model with Name=Editor.update n model.Name}, None
-        | EffortMsg c -> {model with Effort=Editor.update c model.Effort}, None
+        | EffortMsg c -> {model with WorkRequired=Editor.update c model.WorkRequired}, None
         | Save ->
             let cmd =
                 List.tryCons (Option.map (Property.set Toy.name) model.Name.Edit) []
-                |> List.tryCons (Option.map (Property.set Toy.effort) model.Effort.Edit)
+                |> List.tryCons (Option.map (Property.set Toy.workRequired) model.WorkRequired.Edit)
             model, Some(model.LastEvent,cmd)
 
     let subscription _ =
@@ -74,8 +75,8 @@ module Toy =
     let view model =
         UI.div Vertical [
             Editor.view UI.input model.Name |> UI.map NameMsg
-            Editor.view UI.inputUInt16 model.Effort |> UI.map EffortMsg
+            Editor.view UI.inputUInt16 model.WorkRequired |> UI.map EffortMsg
             UI.button "Save" Save
         ]
 
-    let app() = UI.appFull init update view subscription
+    let app() = UI.app init update view subscription

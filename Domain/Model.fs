@@ -11,15 +11,15 @@ type Behaviour = Bad|Ok|Good
 type Toy =
     | Name of string
     | AgeRange of lo:Age * hi:Age
-    | Effort of Work
+    | WorkRequired of Work
 
 type Elf =
     | Name of string
-    | Rate of Work
+    | WorkRate of Work
     | Making of Toy ID option
 
 type Kid =
     | Name of string
     | Age of Age
-    | Been of Behaviour
-    | WishList of Toy SetEvent
+    | Behaviour of Behaviour
+    | WishList of Toy ID SetEvent
