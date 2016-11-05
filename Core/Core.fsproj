@@ -27,7 +27,7 @@
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="Init.fs" />
-    <Compile Include="ID.fs" />
+    <Compile Include="Event.fs" />
     <Compile Include="UI.fs" />
   </ItemGroup>
   <PropertyGroup>

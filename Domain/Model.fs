@@ -1,26 +1,25 @@
 ﻿namespace Lloyd.Domain.Model
 
-open System
-
 type 'a SetEvent =
     | Add of 'a
     | Remove of 'a
 
+type Work = uint16
+type Age = byte
+type Behaviour = Bad|Ok|Good
 
-type Person =
+type Toy =
     | Name of string
+    | AgeRange of lo:Age * hi:Age
+    | Effort of Work
 
-type Venue =
+type Elf =
     | Name of string
-    | Capacity of uint16
+    | Rate of Work
+    | Making of Toy ID option
 
-type Talk =
-    | Title of string
-    | Speaker of Person ID
-
-type Meeting =
+type Kid =
     | Name of string
-    | Venue of Venue ID
-    | Time of DateTime
-    | Talks of Talk ID SetEvent
-    | Attendees of Person ID SetEvent
+    | Age of Age
+    | Been of Behaviour
+    | WishList of Toy SetEvent

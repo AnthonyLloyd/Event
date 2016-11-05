@@ -27,8 +27,8 @@
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="Model.fs" />
-    <Compile Include="Query.fs" />
-    <Compile Include="VenueApp.fs" />
+    <Compile Include="Props.fs" />
+    <Compile Include="Apps.fs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Core\Core.fsproj">

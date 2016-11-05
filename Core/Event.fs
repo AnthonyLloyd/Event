@@ -56,10 +56,10 @@ module Store =
             oeid
 
 [<NoEquality;NoComparison>]
-type Property<'a,'b> = {Name:string; Getter:'a->'b option; Setter:'b->'a; Default:'b}
+type Property<'a,'b> = {Name:string; Getter:'a->'b option; Setter:'b->'a; Default:'b option}
 
 module Property =
-    let create name setter getter def = {Name=name; Getter=getter; Setter=setter; Default=def}
+    let create name setter getter defaultValue = {Name=name; Getter=getter; Setter=setter; Default=defaultValue}
     let getUpdate (property:Property<'a,'b>) (update:'a Events) =
         List.choose (fun (e,l) -> List.tryPick property.Getter l |> Option.map (fun i -> e,i)) update
     let set (property:Property<'a,'b>) v = property.Setter v

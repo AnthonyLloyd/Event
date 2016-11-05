@@ -40,32 +40,32 @@ module Editor =
 
 open Lloyd.Domain.Model
 
-module Venue =
-    type Model = {Name: string Editor.Model; Capacity: uint16 Editor.Model; LastEvent: EventID option}
+module Toy =
+    type Model = {Name: string Editor.Model; Effort: uint16 Editor.Model; LastEvent: EventID option}
 
     let init() =
-        {Name=Editor.init Query.Venue.name; Capacity=Editor.init Query.Venue.capacity; LastEvent=None}, None
+        {Name=Editor.init Toy.name; Effort=Editor.init Toy.effort; LastEvent=None}, None
 
     type Msg =
-        | Update of (EventID * Venue list) list
+        | Update of (EventID * Toy list) list
         | NameMsg of string Editor.Msg
-        | CapacityMsg of uint16 Editor.Msg
+        | EffortMsg of uint16 Editor.Msg
         | Save
 
     let update msg model =
-        printfn "Venue.update: %A" msg
+        printfn "Toy.update: %A" msg
         match msg with
         | Update l -> {model with
-                        Name = Editor.updateProperty Query.Venue.name l model.Name
-                        Capacity = Editor.updateProperty Query.Venue.capacity l model.Capacity
+                        Name = Editor.updateProperty Toy.name l model.Name
+                        Effort = Editor.updateProperty Toy.effort l model.Effort
                         LastEvent = List.tryHead l |> Option.map fst |> Option.orTry model.LastEvent
                       }, None
         | NameMsg n -> {model with Name=Editor.update n model.Name}, None
-        | CapacityMsg c -> {model with Capacity=Editor.update c model.Capacity}, None
+        | EffortMsg c -> {model with Effort=Editor.update c model.Effort}, None
         | Save ->
             let cmd =
-                List.tryCons (Option.map (Property.set Query.Venue.name) model.Name.Edit) []
-                |> List.tryCons (Option.map (Property.set Query.Venue.capacity) model.Capacity.Edit)
+                List.tryCons (Option.map (Property.set Toy.name) model.Name.Edit) []
+                |> List.tryCons (Option.map (Property.set Toy.effort) model.Effort.Edit)
             model, Some(model.LastEvent,cmd)
 
     let subscription _ =
@@ -74,7 +74,7 @@ module Venue =
     let view model =
         UI.div Vertical [
             Editor.view UI.input model.Name |> UI.map NameMsg
-            Editor.view UI.inputUInt16 model.Capacity |> UI.map CapacityMsg
+            Editor.view UI.inputUInt16 model.Effort |> UI.map EffortMsg
             UI.button "Save" Save
         ]
 

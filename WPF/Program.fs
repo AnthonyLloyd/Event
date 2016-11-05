@@ -10,8 +10,8 @@ open Lloyd.WPF.NativeUI
 let main _ =
     let aid = ID.gen()
     let store = Store.emptyMemoryStore()
-    let app = Apps.Venue.app()
-    let subscription() = Store.observable store |> Observable.choose (fun (i,l) -> if i=aid then Apps.Venue.Update l |> Some else None)
+    let app = Apps.Toy.app()
+    let subscription() = Store.observable store |> Observable.choose (fun (i,l) -> if i=aid then Apps.Toy.Update l |> Some else None)
     let commandHandler (lastEvent,cmd) = if List.isEmpty cmd |> not then Store.update aid cmd lastEvent store |> ignore
    
     let window = new Window()
