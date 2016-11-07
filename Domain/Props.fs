@@ -18,3 +18,5 @@ module Kid =
     let age = Property.create "Age" Kid.Age (function |Kid.Age a -> Some a |_->None) None
     let behaviour = Property.create "Behaviour" Kid.Behaviour (function |Kid.Behaviour b -> Some b |_->None) None
     let wishList = Property.create "Wish List" Kid.WishList (function |Kid.WishList w -> Some w |_->None) None
+
+//TODO: Validation of single values?

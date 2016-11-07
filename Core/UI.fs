@@ -13,6 +13,7 @@ type Layout = Horizontal | Vertical
 type UI =
     | Text of string
     | Input of string * string Event
+    | Select of string list * int option * int option Event
     | Button of string * unit Event
     | Div of Layout * UI list
 
@@ -74,6 +75,18 @@ module UI =
         (!ev):=raise
         ui
 
+    /// Returns a generic Select UI component.
+    let select options current =
+        let options = List.sortBy snd options
+        let ev = ref ignore |> ref
+        let ui =
+            let strings = List.map snd options
+            let selected = Option.bind (fun c -> List.tryFindIndex (fst>>(=)c) options) current
+            {UI=Select(strings,selected,ev);Event=ignore}
+        let raise a = Option.map (fun i -> List.item i options |> fst) a |> ui.Event
+        (!ev):=raise
+        ui
+
     /// Returns a Button UI component.
     let button text msg =
         let ev = ref ignore |> ref
@@ -105,7 +118,8 @@ module UI =
             |Text t1,Text t2 -> if t1=t2 then diffs else UpdateUI(path,ui2)::diffs
             |Button (t1,e1),Button (t2,e2) -> if t1=t2 then EventUI(update e1 e2)::diffs else EventUI(update e1 e2)::UpdateUI(path,ui2)::diffs
             |Input (t1,e1),Input (t2,e2) -> if t1=t2 then EventUI(update e1 e2)::diffs else EventUI(update e1 e2)::UpdateUI(path,ui2)::diffs
-            |Button _,Button _ |Input _,Input _ -> UpdateUI(path,ui2)::diffs
+            |Select (o1,s1,e1),Select (o2,s2,e2) -> if o1=o2 && s1=s2 then EventUI(update e1 e2)::diffs else EventUI(update e1 e2)::UpdateUI(path,ui2)::diffs
+            //|Button _,Button _ |Input _,Input _ -> UpdateUI(path,ui2)::diffs
             |Div (l1,_),Div (l2,_) when l1<>l2 -> ReplaceUI(index::path,ui2)::diffs
             |Div (_,[]),Div (_,[]) -> diffs
             |Div (_,[]),Div (_,l) -> List.fold (fun (i,diffs) ui -> i+1,InsertUI(i::path,ui)::diffs) (index,diffs) l |> snd
