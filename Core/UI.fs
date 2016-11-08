@@ -8,11 +8,13 @@ type 'msg Event = ('msg->unit) ref ref
 /// Layout for a section of UI components.
 type Layout = Horizontal | Vertical
 
+type InputType = AnyText | Digits
+
 /// Primative UI components.
 [<NoEquality;NoComparison>]
 type UI =
     | Text of string
-    | Input of string * string Event
+    | Input of InputType * string * string Event
     | Select of string list * int option * int option Event
     | Button of string * unit Event
     | Div of Layout * UI list
@@ -61,17 +63,17 @@ module UI =
     let text text = {UI=Text text;Event=ignore}
     
     /// Returns a text Input UI component.
-    let input text =
+    let inputText text =
         let ev = ref ignore |> ref
-        let ui = {UI=Input(Option.toObj text,ev);Event=ignore}
+        let ui = {UI=Input(AnyText,Option.toObj text,ev);Event=ignore}
         let raise a = ui.Event <| if System.String.IsNullOrWhiteSpace a then None else Some a
         (!ev):=raise
         ui
 
-    let inputUInt16 (i:uint16 option) =
+    let inline inputDigits (digits:'a option) : 'a option UI =
         let ev = ref ignore |> ref
-        let ui = {UI=Input(Option.map string i |> Option.toObj,ev);Event=ignore}
-        let raise a = ui.Event <| match System.UInt16.TryParse a with | true,v -> Some v | _ -> None
+        let ui = {UI=Input(Digits,Option.map string digits |> Option.toObj,ev);Event=ignore}
+        let raise a = String.tryParse a |> ui.Event
         (!ev):=raise
         ui
 
@@ -109,6 +111,27 @@ module UI =
         ui.Event<-raise
         ui2
 
+    let inline inputRange (range:('a*'a) option) =
+        let mutable lo = Option.map fst range
+        let mutable hi = Option.map snd range
+        let range() = match lo,hi with | Some l,Some h -> Some (l,h) |_ -> None
+        let ui =
+            div Horizontal [
+                inputDigits lo |> map Choice1Of2
+                text " - "
+                inputDigits hi |> map Choice2Of2
+            ]
+        let ui2 = {UI=ui.UI;Event=ignore}
+        let raise e =
+            let before = range()
+            match e with
+            | Choice1Of2 l -> lo<-l
+            | Choice2Of2 h -> hi<-h
+            let after = range()
+            if after<>before then ui2.Event after
+        ui.Event<-raise
+        ui2
+
     /// Returns a list of UI updates from two UI components.
     let diff ui1 ui2 =
         let inline update e1 e2 = fun () -> let ev = !e1 in ev:=!(!e2); e2:=ev
@@ -117,7 +140,7 @@ module UI =
             | _,_ when LanguagePrimitives.PhysicalEquality ui1 ui2 -> diffs
             |Text t1,Text t2 -> if t1=t2 then diffs else UpdateUI(path,ui2)::diffs
             |Button (t1,e1),Button (t2,e2) -> if t1=t2 then EventUI(update e1 e2)::diffs else EventUI(update e1 e2)::UpdateUI(path,ui2)::diffs
-            |Input (t1,e1),Input (t2,e2) -> if t1=t2 then EventUI(update e1 e2)::diffs else EventUI(update e1 e2)::UpdateUI(path,ui2)::diffs
+            |Input (c1,t1,e1),Input (c2,t2,e2) -> if c1=c2 && t1=t2 then EventUI(update e1 e2)::diffs else EventUI(update e1 e2)::UpdateUI(path,ui2)::diffs
             |Select (o1,s1,e1),Select (o2,s2,e2) -> if o1=o2 && s1=s2 then EventUI(update e1 e2)::diffs else EventUI(update e1 e2)::UpdateUI(path,ui2)::diffs
             //|Button _,Button _ |Input _,Input _ -> UpdateUI(path,ui2)::diffs
             |Div (l1,_),Div (l2,_) when l1<>l2 -> ReplaceUI(index::path,ui2)::diffs

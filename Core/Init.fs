@@ -64,6 +64,7 @@ module Threading =
             let t,b = d.TryGetValue a
             if t then b
             else let b = f a in d.Add(a,b); b
+    let inline flip f b a = f a b
 
 module String =
     let inline tryParse (s:string) =

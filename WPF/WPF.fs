@@ -12,10 +12,10 @@ let CreateNaiveUI (root:ContentControl) =
         | Text text ->
             let c = Label(Content=text)
             upcast c
-        | Input (text,event) ->
+        | Input (inputType,text,event) ->
             let c = TextBox(Text=text)
             let event = !event
-            //c.PreviewKeyDown.Add(fun x -> x.)
+            if inputType=Digits then c.PreviewTextInput.Add(fun e -> e.Handled<-Seq.forall Char.IsDigit e.Text |> not)
             c.TextChanged.Add(fun _ -> !event c.Text)
             upcast c
         | Select (options,current,event) ->
@@ -36,14 +36,13 @@ let CreateNaiveUI (root:ContentControl) =
             upcast c
 
     let updateTextBox =
-        memoize (fun (tb:TextBox) ->
-            deferred (TimeSpan.FromMilliseconds 200.0) (fun t -> if tb.Text<>t then tb.Text<-t)
-        )
+        let update (tb:TextBox) t = root.Dispatcher.Invoke (fun () -> if tb.Text<>t then tb.Text<-t)
+        update >> deferred (TimeSpan.FromMilliseconds 200.0) |> memoize |> flip
 
     let updateUI ui (element:UIElement) =
         match ui with
         | Text text -> (element :?> Label).Content <- text
-        | Input (text,_) -> updateTextBox (element :?> TextBox) text
+        | Input (_,text,_) -> element :?> TextBox |> updateTextBox text
         | Select (options,current,_) ->
             let c = element :?> ComboBox
             if List.toSeq options <> Seq.cast c.ItemsSource then c.ItemsSource <- options

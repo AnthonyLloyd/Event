@@ -59,6 +59,7 @@ module Toy =
         match msg with
         | Update l -> {model with
                         Name = Editor.updateProperty Toy.name l model.Name
+                        AgeRange = Editor.updateProperty Toy.ageRange l model.AgeRange
                         WorkRequired = Editor.updateProperty Toy.workRequired l model.WorkRequired
                         LastEvent = List.tryHead l |> Option.map fst |> Option.orTry model.LastEvent
                       }, None
@@ -77,9 +78,9 @@ module Toy =
 
     let view model =
         UI.div Vertical [
-            Editor.view UI.input model.Name |> UI.map NameMsg
-            Editor.view (failwith "range") model.AgeRange |> UI.map AgeRangeMsg
-            Editor.view UI.inputUInt16 model.WorkRequired |> UI.map EffortMsg
+            Editor.view UI.inputText model.Name |> UI.map NameMsg
+            Editor.view UI.inputRange model.AgeRange |> UI.map AgeRangeMsg
+            Editor.view UI.inputDigits model.WorkRequired |> UI.map EffortMsg
             UI.button "Save" Save
         ]
 
@@ -120,8 +121,8 @@ module Elf =
 
     let view model =
         UI.div Vertical [
-            Editor.view UI.input model.Name |> UI.map NameMsg
-            Editor.view UI.inputUInt16 model.WorkRate |> UI.map WorkRateMsg
+            Editor.view UI.inputText model.Name |> UI.map NameMsg
+            Editor.view UI.inputDigits model.WorkRate |> UI.map WorkRateMsg
             UI.button "Save" Save
             UI.text (Elf.making.Name+": "+match model.Making with | None -> "Nothing" | Some _ -> "Need name!!!!!")
         ]
@@ -166,8 +167,8 @@ module Kid =
 
     let view model =
         UI.div Vertical [
-            Editor.view UI.input model.Name |> UI.map NameMsg
-            Editor.view (failwith "byte") model.Age |> UI.map AgeMsg
+            Editor.view UI.inputText model.Name |> UI.map NameMsg
+            Editor.view UI.inputDigits model.Age |> UI.map AgeMsg
             Editor.view (UI.select [Bad,"Bad";Ok,"Ok";Good,"Good"]) model.Behaviour |> UI.map BehaviourMsg
             (*Toy set*)
             UI.button "Save" Save
