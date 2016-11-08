@@ -1,5 +1,6 @@
 ﻿namespace Lloyd.Core
 
+open System
 open System.Threading
 
 type Result<'o,'e> =
@@ -28,20 +29,46 @@ module Result =
 
 [<AutoOpen>]
 module Threading =
-    let atomicUpdate state f =
-        let rec update() =
-            let o = !state
-            let o' = f o
-            if Interlocked.CompareExchange<_>(state, o', o) |> LanguagePrimitives.PhysicalEquality o then o'
-            else update()
-        update()
-    let atomicUpdateWithQuery state f =
-        let rec update() =
-            let o = !state
-            let o',result = f o
-            if Interlocked.CompareExchange<_>(state, o', o) |> LanguagePrimitives.PhysicalEquality o then o',result
-            else update()
-        update()
+    let rec atomicUpdate update state =
+        let oldState = !state
+        let newState = update oldState
+        if Interlocked.CompareExchange<_>(state, newState, oldState) |> LanguagePrimitives.PhysicalEquality oldState then oldState,newState
+        else atomicUpdate update state
+    let rec atomicUpdateQuery update state =
+        let oldState = !state
+        let newState,result = update oldState
+        if Interlocked.CompareExchange<_>(state, newState, oldState) |> LanguagePrimitives.PhysicalEquality oldState then newState,result
+        else atomicUpdateQuery update state
+    let deferred t f =
+        let nextTime = ref None
+        let rec check() = async {
+            atomicUpdate (Option.bind (fun (next,a) ->
+                let now = DateTime.UtcNow
+                if next>now then
+                    async {
+                        do! Async.Sleep(let ts=next-now in int ts.Milliseconds)
+                        do! check()
+                    } |> Async.Start
+                    Some(next,a)
+                else
+                    async { f a } |> Async.Start
+                    None
+            )) nextTime |> ignore
+        }
+        fun a ->
+            let oldNextTime,_ = atomicUpdate (fun _ -> let utc = DateTime.UtcNow in Some(utc.Add(t),a)) nextTime
+            if Option.isNone oldNextTime then check() |> Async.Start
+    let memoize f =
+        let d = Collections.Generic.Dictionary(HashIdentity.Structural)
+        fun a ->
+            let t,b = d.TryGetValue a
+            if t then b
+            else let b = f a in d.Add(a,b); b
+
+module String =
+    let inline tryParse (s:string) =
+        let mutable r = Unchecked.defaultof<_>
+        if (^a : (static member TryParse: string * ^a byref -> bool) (s, &r)) then Some r else None
 
 module Option =
     let getElse v o = match o with | Some i -> i | None -> v

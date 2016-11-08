@@ -32,27 +32,27 @@ module Store =
         | MemoryStore storeRef ->
             {new IObservable<_> with
                 member __.Subscribe(ob:IObserver<_>) =
-                    let msd = atomicUpdate storeRef (fun i -> {Updates=i.Updates; Observers=ob::i.Observers})
-                    Map.toSeq msd.Updates |> Seq.iter ob.OnNext
+                    let _,newStore = atomicUpdate (fun i -> {Updates=i.Updates; Observers=ob::i.Observers}) storeRef
+                    Map.toSeq newStore.Updates |> Seq.iter ob.OnNext
                     {new IDisposable with
                         member __.Dispose() =
-                            atomicUpdate storeRef (fun i -> {Updates=i.Updates; Observers=List.where ((<>)ob) i.Observers}) |> ignore
+                            atomicUpdate (fun i -> {Updates=i.Updates; Observers=List.where ((<>)ob) i.Observers}) storeRef |> ignore
                     }
             }
     let update (aid:'Aggregate ID) (updates:'Aggregate list) (lastEvent:EventID option) (store:'Aggregate Store) =
         assert(List.isEmpty updates |> not)
         match store with
         | MemoryStore storeRef ->
-            let store,oeid =
-                atomicUpdateWithQuery storeRef (fun store ->
+            let newStore,oeid =
+                atomicUpdateQuery (fun store ->
                     match Map.tryFind aid store.Updates with
-                    | Some ((eid,_)::_) when Some eid <> lastEvent -> store,None
+                    | Some ((eid,_)::_) when Some eid <> lastEvent -> store, None
                     | o ->
                         let eid = EventID.gen()
                         printfn "MemoryStore.update: %A %A" eid updates
                         {Updates=Map.add aid ((eid,updates)::Option.getElse [] o) store.Updates; Observers=store.Observers}, Some eid
-                )
-            if Option.isSome oeid then store.Observers |> Seq.iter (fun ob -> ob.OnNext(aid,Map.find aid store.Updates))
+                ) storeRef
+            if Option.isSome oeid then newStore.Observers |> Seq.iter (fun ob -> ob.OnNext(aid,Map.find aid newStore.Updates))
             oeid
 
 [<NoEquality;NoComparison>]

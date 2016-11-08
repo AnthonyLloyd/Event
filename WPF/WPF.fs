@@ -1,11 +1,12 @@
 ﻿module Lloyd.WPF.NativeUI.WPF
 
+open System
 open System.Windows
 open System.Windows.Controls
 open Lloyd.Core.UI
 
 let CreateNaiveUI (root:ContentControl) =
-    
+
     let rec createUI ui : UIElement =
         match ui with
         | Text text ->
@@ -14,6 +15,7 @@ let CreateNaiveUI (root:ContentControl) =
         | Input (text,event) ->
             let c = TextBox(Text=text)
             let event = !event
+            //c.PreviewKeyDown.Add(fun x -> x.)
             c.TextChanged.Add(fun _ -> !event c.Text)
             upcast c
         | Select (options,current,event) ->
@@ -33,10 +35,15 @@ let CreateNaiveUI (root:ContentControl) =
             List.iter (c.Children.Add>>ignore) children
             upcast c
 
+    let updateTextBox =
+        memoize (fun (tb:TextBox) ->
+            deferred (TimeSpan.FromMilliseconds 200.0) (fun t -> if tb.Text<>t then tb.Text<-t)
+        )
+
     let updateUI ui (element:UIElement) =
         match ui with
         | Text text -> (element :?> Label).Content <- text
-        | Input (text,_) -> (element :?> TextBox).Text <- text
+        | Input (text,_) -> updateTextBox (element :?> TextBox) text
         | Select (options,current,_) ->
             let c = element :?> ComboBox
             if List.toSeq options <> Seq.cast c.ItemsSource then c.ItemsSource <- options
