@@ -55,6 +55,20 @@ module Store =
             if Option.isSome oeid then newStore.Observers |> Seq.iter (fun ob -> ob.OnNext(aid,Map.find aid newStore.Updates))
             oeid
 
+type 'a SetEvent =
+    | Add of 'a
+    | Remove of 'a
+
+module SetEvent =
+    let toSet (events:'a SetEvent Events) =
+        Seq.map snd events
+        |> Seq.fold (List.fold (fun (removed,added) (se:'a SetEvent) ->
+                match se with
+                | Add a -> if Set.contains a removed then removed,added else removed,Set.add a added
+                | Remove a -> Set.add a removed,added
+           )) (Set.empty,Set.empty)
+        |> snd
+
 [<NoEquality;NoComparison>]
 type Property<'a,'b> = {Name:string; Getter:'a->'b option; Setter:'b->'a; Default:'b option}
 
@@ -62,4 +76,6 @@ module Property =
     let create name setter getter defaultValue = {Name=name; Getter=getter; Setter=setter; Default=defaultValue}
     let getUpdate (property:Property<'a,'b>) (update:'a Events) =
         List.choose (fun (e,l) -> List.tryPick property.Getter l |> Option.map (fun i -> e,i)) update
+    let getUpdateList (property:Property<'a,'b>) (update:'a Events) =
+        List.choose (fun (e,l) -> match List.choose property.Getter l with |[] -> None |l -> Some (e,l)) update
     let set (property:Property<'a,'b>) v = property.Setter v

@@ -1,9 +1,5 @@
 ﻿namespace Lloyd.Domain.Model
 
-type 'a SetEvent =
-    | Add of 'a
-    | Remove of 'a
-
 type Work = uint16
 type Age = byte
 type Behaviour = Bad|Ok|Good

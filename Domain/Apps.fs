@@ -1,6 +1,7 @@
 ﻿namespace Lloyd.Domain.Apps
 
 open Lloyd.Core.UI
+open Lloyd.Domain.Model
 
 module Editor =
     type 'a Model = {Label:string; Previous:(EventID * 'a) option; Latest:(EventID * 'a) option; Edit:'a option}
@@ -9,10 +10,10 @@ module Editor =
         {Label=property.Name+":"; Previous=None; Latest=None; Edit=None}
 
     type 'a Msg =
+        | Edit of 'a option
         | Reset
         | Update of (EventID * 'a) list
-        | Edit of 'a option
-        
+
     let update msg model =
         match msg with
         | Edit e -> {model with Edit=e}
@@ -29,16 +30,53 @@ module Editor =
         update (Property.getUpdate property msg |> Update) model
         
     let view inputUI model =
-        let currentValue = model.Edit |> Option.orTry (Option.map snd model.Latest)
+        let current = model.Edit |> Option.orTry (Option.map snd model.Latest)
         UI.div Vertical [
             UI.text model.Label
-            inputUI currentValue |> UI.map Edit
+            inputUI current |> UI.map Edit
         ]
 
     let app inputUI property = UI.appSimple (fun () -> init property) update (view inputUI) // TODO: tooltip, coloured border, lots of input editors for types, rightclick reset
 
+module EditorSet =
+    type 'a Model = {Label:string; Previous:(EventID * 'a list) option; Latest:(EventID * 'a list) option; Edit:'a option list option}
 
-open Lloyd.Domain.Model
+    let init property =
+        {Label=property.Name+":"; Previous=None; Latest=None; Edit=None}
+
+    type 'a Msg =
+        | Insert
+        | Remove of int
+        | Modify of int * 'a option
+        | Update of 'a SetEvent Events
+
+    let current model = model.Edit |> Option.orTry (Option.map (snd>>List.map Some) model.Latest) |> Option.getElse []
+
+    let update msg model =
+        match msg with
+        | Insert -> {model with Edit= None::current model |> Some}
+        | Remove i -> {model with Edit= current model |> List.removei i |> Some}
+        | Modify (i,v) -> {model with Edit= current model |> List.replacei i v |> Some}
+        | Update l ->
+            let latest,previous = match l with |[] -> None,None |[_] -> Some l,None |_::t -> Some l,Some t
+            let latestSet = Option.map (fun l -> List.head l |> fst, SetEvent.toSet l) latest
+            {model with
+                Previous = Option.map (fun l -> List.head l |> fst, SetEvent.toSet l |> Set.toList) previous
+                Latest = Option.map (fun (eid,s) -> eid, Set.toList s) latestSet
+                Edit =  match model.Edit with
+                        | Some l when List.forall Option.isSome l
+                            && List.map Option.get l |> Set.ofList = (Option.map snd latestSet |> Option.getElse Set.empty) -> None
+                        | _ -> model.Edit
+            }
+
+    let updateProperty property msg model =
+        update (Property.getUpdateList property msg |> Update) model
+
+    let view inputUI model =
+        let header = UI.div Horizontal [UI.text model.Label ; UI.button "+" Insert]
+        let item i a = UI.div Horizontal [inputUI a |> UI.map (fun v -> Modify(i,v)); UI.button "-" (Remove i)]
+        let items = current model |> List.mapi item
+        header::items |> UI.div Vertical
 
 module Toy =
 
@@ -132,16 +170,17 @@ module Elf =
 
 module Kid =
 
-    type Model = {Name:string Editor.Model; Age:Age Editor.Model; Behaviour:Behaviour Editor.Model; LastEvent:EventID option}
+    type Model = {Name:string Editor.Model; Age:Age Editor.Model; Behaviour:Behaviour Editor.Model; WishList:Toy ID EditorSet.Model; LastEvent:EventID option}
 
     let init() =
-        {Name=Editor.init Kid.name; Age=Editor.init Kid.age; Behaviour=Editor.init Kid.behaviour; LastEvent=None}, None
+        {Name=Editor.init Kid.name; Age=Editor.init Kid.age; Behaviour=Editor.init Kid.behaviour; WishList=EditorSet.init Kid.wishList; LastEvent=None}, None
 
     type Msg =
         | Update of Kid Events
         | NameMsg of string Editor.Msg
         | AgeMsg of Age Editor.Msg
         | BehaviourMsg of Behaviour Editor.Msg
+        | WishListMsg of Toy ID EditorSet.Msg
         | Save
 
     let update msg model =
@@ -150,11 +189,14 @@ module Kid =
         | Update l -> {model with
                         Name = Editor.updateProperty Kid.name l model.Name
                         Age = Editor.updateProperty Kid.age l model.Age
+                        Behaviour = Editor.updateProperty Kid.behaviour l model.Behaviour
+                        WishList = EditorSet.updateProperty Kid.wishList l model.WishList
                         LastEvent = List.tryHead l |> Option.map fst |> Option.orTry model.LastEvent
                       }, None
         | NameMsg n -> {model with Name=Editor.update n model.Name}, None
         | AgeMsg r -> {model with Age=Editor.update r model.Age}, None
         | BehaviourMsg c -> {model with Behaviour=Editor.update c model.Behaviour}, None
+        | WishListMsg w -> {model with WishList=EditorSet.update w model.WishList}, None
         | Save ->
             let cmd =
                 List.tryCons (Option.map (Property.set Kid.name) model.Name.Edit) []
