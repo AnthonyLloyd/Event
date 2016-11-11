@@ -12,14 +12,14 @@ module Editor =
     type 'a Msg =
         | Edit of 'a option
         | Reset
-        | Update of (EventID * 'a) list
+        | Update of 'a Events
 
     let update msg model =
         match msg with
         | Edit e -> {model with Edit=e}
         | Reset -> {model with Edit=None}
         | Update l ->
-            let latest,previous = match l with |[] -> None,None |[l] -> Some l,None |l::p::_ -> Some l,Some p
+            let latest,previous = match l with |[] -> None,None |[e,[a]] -> Some(e,a),None |(le,[la])::(pe,[pa])::_ -> Some(le,la),Some(pe,pa) |_ -> failwith "Not possible"
             {model with
                 Previous = previous
                 Latest = latest
@@ -27,7 +27,7 @@ module Editor =
             }
 
     let updateProperty property msg model =
-        update (Property.getUpdates property msg |> Update) model
+        update (Property.getEvents property msg |> Update) model
         
     let view inputUI model =
         let current = model.Edit |> Option.orTry (Option.map snd model.Latest)
@@ -70,7 +70,7 @@ module EditorSet =
             }
 
     let updateProperty property msg model =
-        update (Property.getUpdatesList property msg |> Update) model
+        update (Property.getEvents property msg |> Update) model
 
     let view inputUI model =
         let header = UI.div Horizontal [UI.text model.Label ; UI.button "+" Insert]
@@ -202,6 +202,9 @@ module Kid =
                 List.tryCons (Option.map (Property.set Kid.name) model.Name.Edit) []
                 |> List.tryCons (Option.map (Property.set Kid.age) model.Age.Edit)
                 |> List.tryCons (Option.map (Property.set Kid.behaviour) model.Behaviour.Edit)
+            let after = model.WishList.Edit |> Option.map (List.choose id>>Set.ofList)
+            let before = model.WishList.Latest |> Option.map (snd>>Set.ofList) |> Option.getElse Set.empty
+            let cmd = List.tryAppend (Option.map (SetEvent.difference before>>List.map Kid.WishList) after) cmd
             model, Some(model.LastEvent,cmd)
 
     let subscription _ =
@@ -212,7 +215,7 @@ module Kid =
             Editor.view UI.inputText model.Name |> UI.map NameMsg
             Editor.view UI.inputDigits model.Age |> UI.map AgeMsg
             Editor.view (UI.select [Bad,"Bad";Ok,"Ok";Good,"Good"]) model.Behaviour |> UI.map BehaviourMsg
-            (*Toy set*)
+            EditorSet.view (UI.select []) model.WishList |> UI.map WishListMsg
             UI.button "Save" Save
         ]
 

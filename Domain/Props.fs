@@ -45,7 +45,7 @@ module Kid =
     let behaviour = Property.create "Behaviour" Behaviour (function |Behaviour b -> Some b |_->None)
                         (function |Some b -> Ok b |None -> Error(Behaviour Good,"Please enter behaviour"))
     let wishList = Property.create "Wish List" WishList (function |WishList w -> Some w |_->None)
-                        (function |Some w -> Ok w |None -> failwith "aghh")
+                        (function |Some w -> Ok w |None -> failwith "Not possible")
 
     type View = {Name:string; Age:Age; Behaviour:Behaviour; WishList:Toy ID Set}
 
@@ -54,4 +54,4 @@ module Kid =
         <*> Property.get name events
         <*> Property.get age events
         <*> Property.get behaviour events
-        <*> Property.get wishList events
+        <*> (Property.getEvents wishList events |> SetEvent.toSet |> Ok)

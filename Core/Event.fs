@@ -60,6 +60,8 @@ type 'a SetEvent =
     | Remove of 'a
 
 module SetEvent =
+    let difference (before:'a Set) (after:'a Set) =
+        Seq.append (after-before |> Set.toSeq |> Seq.map Add) (before-after |> Set.toSeq |> Seq.map Remove) |> Seq.toList
     let toSet (events:'a SetEvent Events) =
         Seq.map snd events
         |> Seq.fold (List.fold (fun (removed,added) (se:'a SetEvent) ->
@@ -74,10 +76,8 @@ type Property<'a,'b> = {Name:string; Getter:'a->'b option; Setter:'b->'a; Valida
 
 module Property =
     let create name setter getter validation = {Name=name; Getter=getter; Setter=setter; Validation=validation}
-    let getUpdates (property:Property<'a,'b>) (update:'a Events) =
-        List.choose (fun (e,l) -> List.tryPick property.Getter l |> Option.map (fun i -> e,i)) update
-    let getUpdatesList (property:Property<'a,'b>) (update:'a Events) =
-        List.choose (fun (e,l) -> match List.choose property.Getter l with |[] -> None |l -> Some (e,l)) update
     let set (property:Property<'a,'b>) v = property.Setter v
     let get (property:Property<'a,'b>) (updates:'a Events) =
         List.tryPick (snd >> List.tryPick property.Getter) updates |> property.Validation
+    let getEvents (property:Property<'a,'b>) (update:'a Events) : 'b Events =
+        List.choose (fun (e,l) -> match List.choose property.Getter l with |[] -> None |l -> Some (e,l)) update

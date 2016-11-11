@@ -77,6 +77,7 @@ module Option =
 
 module List =
     let tryCons o xs = match o with |None -> xs | Some x -> x::xs
+    let tryAppend o xs = match o with |None -> xs | Some x -> x@xs
     let removei i l =
         let s1,s2 =List.splitAt i l
         s1 @ List.tail s2
