@@ -66,7 +66,7 @@ module UI =
     let inputText text =
         let ev = ref ignore |> ref
         let ui = {UI=Input(AnyText,Option.toObj text,ev);Event=ignore}
-        let raise a = ui.Event <| if System.String.IsNullOrWhiteSpace a then None else Some a
+        let raise a = String.nonEmpty a |> ui.Event
         (!ev):=raise
         ui
 

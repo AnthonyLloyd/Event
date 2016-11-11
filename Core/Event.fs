@@ -70,12 +70,14 @@ module SetEvent =
         |> snd
 
 [<NoEquality;NoComparison>]
-type Property<'a,'b> = {Name:string; Getter:'a->'b option; Setter:'b->'a; Default:'b option}
+type Property<'a,'b> = {Name:string; Getter:'a->'b option; Setter:'b->'a; Validation:'b option->Result<'b,'a*string>}
 
 module Property =
-    let create name setter getter defaultValue = {Name=name; Getter=getter; Setter=setter; Default=defaultValue}
-    let getUpdate (property:Property<'a,'b>) (update:'a Events) =
+    let create name setter getter validation = {Name=name; Getter=getter; Setter=setter; Validation=validation}
+    let getUpdates (property:Property<'a,'b>) (update:'a Events) =
         List.choose (fun (e,l) -> List.tryPick property.Getter l |> Option.map (fun i -> e,i)) update
-    let getUpdateList (property:Property<'a,'b>) (update:'a Events) =
+    let getUpdatesList (property:Property<'a,'b>) (update:'a Events) =
         List.choose (fun (e,l) -> match List.choose property.Getter l with |[] -> None |l -> Some (e,l)) update
     let set (property:Property<'a,'b>) v = property.Setter v
+    let get (property:Property<'a,'b>) (updates:'a Events) =
+        List.tryPick (snd >> List.tryPick property.Getter) updates |> property.Validation

@@ -27,7 +27,7 @@ module Editor =
             }
 
     let updateProperty property msg model =
-        update (Property.getUpdate property msg |> Update) model
+        update (Property.getUpdates property msg |> Update) model
         
     let view inputUI model =
         let current = model.Edit |> Option.orTry (Option.map snd model.Latest)
@@ -70,7 +70,7 @@ module EditorSet =
             }
 
     let updateProperty property msg model =
-        update (Property.getUpdateList property msg |> Update) model
+        update (Property.getUpdatesList property msg |> Update) model
 
     let view inputUI model =
         let header = UI.div Horizontal [UI.text model.Label ; UI.button "+" Insert]

@@ -18,9 +18,7 @@ module Result =
         | Ok _, Error f -> Error [f]
         | Error f1, Error f2 -> Error (f2::f1)
     let (<*>) = apply
-    let ofOption format =
-        let sb = System.Text.StringBuilder()
-        Printf.kbprintf (fun ()->function |Some x -> Ok x |None -> sb.ToString() |> Error) sb format
+    let ofOption f o = match o with | None -> f() |> Error | Some v -> Ok v
     type AttemptBuilder() =
         member __.Bind(v,f) = bind f v
         member __.Return v = Ok v
@@ -67,6 +65,7 @@ module Threading =
     let inline flip f b a = f a b
 
 module String =
+    let nonEmpty s = if String.IsNullOrWhiteSpace s then None else s.Trim() |> Some
     let inline tryParse (s:string) =
         let mutable r = Unchecked.defaultof<_>
         if (^a : (static member TryParse: string * ^a byref -> bool) (s, &r)) then Some r else None
