@@ -9,7 +9,7 @@ module EventID =
     let create time user = EventID(time,user)
     let time (EventID(t,_)) = t
     let User (EventID(_,u)) = u
-    let gen() = EventID(DateTime.UtcNow,"Ant")
+    let gen() = EventID(DateTime.UtcNow,"Ant") // TODO: increment time so now dups
 
 type 'Aggregate ID = Created of EventID
 
