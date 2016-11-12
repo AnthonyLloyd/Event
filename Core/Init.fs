@@ -19,6 +19,7 @@ module Result =
         | Error f1, Error f2 -> Error (f2::f1)
     let (<*>) = apply
     let ofOption f o = match o with | None -> f() |> Error | Some v -> Ok v
+    let getElse v r = match r with |Ok o -> o |Error _ -> v
     type AttemptBuilder() =
         member __.Bind(v,f) = bind f v
         member __.Return v = Ok v
@@ -65,6 +66,7 @@ module Threading =
     let inline flip f b a = f a b
 
 module String =
+    let empty = String.Empty
     let nonEmpty s = if String.IsNullOrWhiteSpace s then None else s.Trim() |> Some
     let inline tryParse (s:string) =
         let mutable r = Unchecked.defaultof<_>
