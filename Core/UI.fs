@@ -169,7 +169,7 @@ module UI =
                     let! msg = mb.Receive()
                     let model,cmd = app.Update msg model
                     let subs = Map.updateFromKeys (subscriptionHandler >> Observable.subscribe mb.Post) (fun d -> d.Dispose()) (app.Subscription model) subs
-                    Option.iter commandHandler cmd
+                    commandHandler cmd
                     let newUI = app.View model
                     newUI.Event<-mb.Post
                     let diff = diff ui newUI
@@ -179,7 +179,7 @@ module UI =
                 }
             let model,cmd = app.Init()
             let subs = app.Subscription model |> Seq.map  (fun s -> s,subscriptionHandler s |> Observable.subscribe mb.Post) |> Map.ofSeq
-            Option.iter commandHandler cmd
+            commandHandler cmd
             let ui = app.View model
             ui.Event<-mb.Post
             nativeUI.Send [InsertUI([],ui.UI)]

@@ -146,12 +146,9 @@ module KidEdit =
     let app() = UI.app init update view subscription
 
 type Cmd =
-    | CmdElfNew
-    | CmdElfEdit of Elf ID
-    | CmdToyNew
-    | CmdToyEdit of Toy ID
-    | CmdKidNew
-    | CmdKidEdit of Kid ID
+    | OpenKidEdit of Kid ID option
+    | OpenToyEdit of Toy ID option
+    | OpenElfEdit of Elf ID option
 
 module ElfList =
     type Row = {ID:Elf ID; Name:string; Making:Toy ID option}
@@ -181,8 +178,8 @@ module ElfList =
             | _, Error _ -> model, None
             | None, Ok n -> {model with ToyNames = Map.add tid n model.ToyNames}, None
             | Some o, Ok n -> if o=n then model, None else {model with ToyNames = Map.add tid n model.ToyNames}, None
-        | Edit eid -> model, CmdElfEdit eid |> Some
-        | New -> model, Some CmdElfNew
+        | Edit eid -> model, Some eid |> OpenElfEdit |> Some
+        | New -> model, OpenElfEdit None |> Some
 
     let subscription _ =
         Set.singleton ()
@@ -209,7 +206,7 @@ module KidList =
         | Edit of Kid ID
         | New
 
-    let update msg model =
+    let update msg model : Model * Cmd option =
         failwith "hi"
 
     let subscription _ =
@@ -237,7 +234,7 @@ module ToyList =
         | Edit of Toy ID
         | New
 
-    let update msg model =
+    let update msg model : Model * Cmd option =
         failwith "hi"
 
     let subscription _ =
@@ -255,7 +252,7 @@ module ToyList =
 module Main =
     type Model = {Kid:KidList.Model; Toy:ToyList.Model; Elf:ElfList.Model}
 
-    let init() = {Kid=KidList.init() |> fst; Toy=ToyList.init() |> fst; Elf=ElfList.init() |> fst}, None
+    let init() = {Kid=KidList.init() |> fst; Toy=ToyList.init() |> fst; Elf=ElfList.init() |> fst}, []
 
     type Msg =
         | KidUpdate of Kid ID * Kid Events
@@ -267,12 +264,22 @@ module Main =
 
     let update msg model =
         match msg with
-        | KidUpdate (kid,events) -> {model with Kid = KidList.update (KidUpdate(kid,events)) model.Kid; Toy = ToyList.update (KidUpdate(kid,events)) model.Toy}
-        | ToyUpdate (tid,events) -> {model with Kid = KidList.update (ToyUpdate(tid,events)) model.Kid; Toy = ToyList.update (ToyUpdate(tid,events)) model.Toy}
-        | ElfUpdate (eid,events) -> {model with Kid = KidList.update (ElfUpdate(eid,events)) model.Kid; Toy = ToyList.update (ElfUpdate(eid,events)) model.Toy}
-        | KidMsg m -> {model with Kid = KidList.update m model.Kid}
-        | ToyMsg m -> {model with Toy = ToyList.update m model.Toy}
-        | ElfMsg m -> {model with Elf = ElfList.update m model.Elf}
+        | KidUpdate (kid,events) ->
+            let kidModel,kidCmd = KidList.update (KidList.Msg.KidUpdate(kid,events)) model.Kid
+            let toyModel,toyCmd = ToyList.update (ToyList.Msg.KidUpdate(kid,events)) model.Toy
+            {model with Kid = kidModel; Toy = toyModel}, List.choose id [kidCmd;toyCmd]
+        | ToyUpdate (tid,events) ->
+            let toyModel,toyCmd = ToyList.update (ToyList.Msg.ToyUpdate(tid,events)) model.Toy
+            let elfModel,elfCmd = ElfList.update (ElfList.Msg.ToyUpdate(tid,events)) model.Elf
+            {model with Toy = toyModel; Elf = elfModel}, List.choose id [toyCmd;elfCmd]
+        | ElfUpdate (eid,events) ->
+            let kidModel,kidCmd = KidList.update (KidList.Msg.ElfUpdate(eid,events)) model.Kid
+            let toyModel,toyCmd = ToyList.update (ToyList.Msg.ElfUpdate(eid,events)) model.Toy
+            let elfModel,elfCmd = ElfList.update (ElfList.Msg.ElfUpdate(eid,events)) model.Elf
+            {model with Kid = kidModel; Toy = toyModel; Elf = elfModel}, List.choose id [kidCmd;toyCmd;elfCmd]
+        | KidMsg m -> let kid,cmd = KidList.update m model.Kid in {model with Kid = kid}, Option.toList cmd
+        | ToyMsg m -> let toy,cmd = ToyList.update m model.Toy in {model with Toy = toy}, Option.toList cmd
+        | ElfMsg m -> let elf,cmd = ElfList.update m model.Elf in {model with Elf = elf}, Option.toList cmd
 
     let subscription _ =
         Set.singleton ()
