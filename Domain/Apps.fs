@@ -138,16 +138,23 @@ module KidEdit =
         UI.div Vertical [
             Editor.view UI.inputText model.Name |> UI.map NameMsg
             Editor.view UI.inputDigits model.Age |> UI.map AgeMsg
-            Editor.view (UI.select [Bad,"Bad";Ok,"Ok";Good,"Good"]) model.Behaviour |> UI.map BehaviourMsg
+            Editor.view (UI.select [Bad,"Bad";Mixed,"Mixed";Good,"Good"]) model.Behaviour |> UI.map BehaviourMsg
             EditorSet.view (UI.select []) model.WishList |> UI.map WishListMsg
             UI.button "Save" Save
         ]
 
     let app() = UI.app init update view subscription
 
+type Cmd =
+    | CmdElfNew
+    | CmdElfEdit of Elf ID
+    | CmdToyNew
+    | CmdToyEdit of Toy ID
+    | CmdKidNew
+    | CmdKidEdit of Kid ID
 
 module ElfList =
-    type Row = {ID:Elf ID; Name:string; Making:Toy ID option; LastEvent:EventID}
+    type Row = {ID:Elf ID; Name:string; Making:Toy ID option}
     type Model = {Rows:Row list; ToyNames:Map<Toy ID,string>}
 
     let init() = {Rows=[]; ToyNames=Map.empty}, None
@@ -161,21 +168,21 @@ module ElfList =
     let update msg model =
         match msg with
         | ElfUpdate (eid,events) ->
-            match List.tryFind (fun r -> r.ID=eid) model.Rows with
-            | None -> { model with
-                            Rows =
-                                {
-                                    ID = eid
-                                    Name = Property.get Elf.name events |> Result.getElse String.empty
-                                    Making = Property.get Elf.making events |> Result.getElse None
-                                    LastEvent = List.head events |> fst
-                                }::model.Rows
-                       }, None
-             | Some _ -> failwith "hi"
+            let createRow() = {
+                ID = eid
+                Name = Property.get Elf.name events |> Result.getElse String.empty
+                Making = Property.get Elf.making events |> Result.getElse None
+            }
+            match List.tryFindIndex (fun r -> r.ID=eid) model.Rows with
+            | None -> {model with Rows = createRow()::model.Rows |> List.sortBy (fun r -> r.Name)}, None
+            | Some i -> {model with Rows = List.replacei i (createRow()) model.Rows |> List.sortBy (fun r -> r.Name)}, None
         | ToyUpdate (tid,events) ->
-            failwith "hi"
-        | Edit eid -> model, Some eid |> Some
-        | New -> model, Some None
+            match Map.tryFind tid model.ToyNames, Property.get Toy.name events with
+            | _, Error _ -> model, None
+            | None, Ok n -> {model with ToyNames = Map.add tid n model.ToyNames}, None
+            | Some o, Ok n -> if o=n then model, None else {model with ToyNames = Map.add tid n model.ToyNames}, None
+        | Edit eid -> model, CmdElfEdit eid |> Some
+        | New -> model, Some CmdElfNew
 
     let subscription _ =
         Set.singleton ()
@@ -186,5 +193,95 @@ module ElfList =
             let making = Option.bind (fun tid -> Map.tryFind tid model.ToyNames) row.Making |> Option.getElse String.empty
             UI.div Horizontal [UI.text row.Name; UI.text making; UI.button "edit" (Edit row.ID)]
         header::List.map rowUI model.Rows |> UI.div Vertical
+
+    let app() = UI.app init update view subscription
+
+
+module KidList =
+    type Row = {ID:Kid ID; Name:string; WishList:int; Made:int}
+    type Model = Row list
+
+    let init() = [], None
+
+    type Msg =
+        | KidUpdate of Kid ID * Kid Events
+        | ElfUpdate of Elf ID * Elf Events
+        | Edit of Kid ID
+        | New
+
+    let update msg model =
+        failwith "hi"
+
+    let subscription _ =
+        Set.singleton ()
+
+    let view model =
+        let header = UI.div Horizontal [UI.text "Kid"; UI.text "Wish List"; UI.text "Made"; UI.button "new" New]
+        let rowUI row =
+            UI.div Horizontal [UI.text row.Name; UI.text (string row.WishList); UI.text (string row.Made); UI.button "edit" (Edit row.ID)]
+        header::List.map rowUI model |> UI.div Vertical
+
+    let app() = UI.app init update view subscription
+
+
+module ToyList =
+    type Row = {ID:Toy ID; Name:string; Requested:int; Finished:int}
+    type Model = Row list
+
+    let init() = [], None
+
+    type Msg =
+        | KidUpdate of Kid ID * Kid Events
+        | ToyUpdate of Toy ID * Toy Events
+        | ElfUpdate of Elf ID * Elf Events
+        | Edit of Toy ID
+        | New
+
+    let update msg model =
+        failwith "hi"
+
+    let subscription _ =
+        Set.singleton ()
+
+    let view model =
+        let header = UI.div Horizontal [UI.text "Toy"; UI.text "Requested"; UI.text "Finished"; UI.button "new" New]
+        let rowUI row =
+            UI.div Horizontal [UI.text row.Name; UI.text (string row.Requested); UI.text (string row.Finished); UI.button "edit" (Edit row.ID)]
+        header::List.map rowUI model |> UI.div Vertical
+
+    let app() = UI.app init update view subscription
+
+
+module Main =
+    type Model = {Kid:KidList.Model; Toy:ToyList.Model; Elf:ElfList.Model}
+
+    let init() = {Kid=KidList.init() |> fst; Toy=ToyList.init() |> fst; Elf=ElfList.init() |> fst}, None
+
+    type Msg =
+        | KidUpdate of Kid ID * Kid Events
+        | ToyUpdate of Toy ID * Toy Events
+        | ElfUpdate of Elf ID * Elf Events
+        | KidMsg of KidList.Msg
+        | ToyMsg of ToyList.Msg
+        | ElfMsg of ElfList.Msg
+
+    let update msg model =
+        match msg with
+        | KidUpdate (kid,events) -> {model with Kid = KidList.update (KidUpdate(kid,events)) model.Kid; Toy = ToyList.update (KidUpdate(kid,events)) model.Toy}
+        | ToyUpdate (tid,events) -> {model with Kid = KidList.update (ToyUpdate(tid,events)) model.Kid; Toy = ToyList.update (ToyUpdate(tid,events)) model.Toy}
+        | ElfUpdate (eid,events) -> {model with Kid = KidList.update (ElfUpdate(eid,events)) model.Kid; Toy = ToyList.update (ElfUpdate(eid,events)) model.Toy}
+        | KidMsg m -> {model with Kid = KidList.update m model.Kid}
+        | ToyMsg m -> {model with Toy = ToyList.update m model.Toy}
+        | ElfMsg m -> {model with Elf = ElfList.update m model.Elf}
+
+    let subscription _ =
+        Set.singleton ()
+
+    let view model =
+        UI.div Horizontal [
+            KidList.view model.Kid |> UI.map KidMsg
+            ToyList.view model.Toy |> UI.map ToyMsg
+            ElfList.view model.Elf |> UI.map ElfMsg
+        ]
 
     let app() = UI.app init update view subscription

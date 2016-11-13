@@ -2,7 +2,7 @@
 
 type Work = uint16
 type Age = byte
-type Behaviour = Bad|Ok|Good
+type Behaviour = Bad|Mixed|Good
 
 type Toy =
     | Name of string

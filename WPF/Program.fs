@@ -21,7 +21,7 @@ let createElfStore() =
 let createKidStore() =
     let store = Store.emptyMemoryStore()
     let randomAge() = rand.Next 17 |> byte |> Kid.Age
-    let randomBehaviour() = Kid.Behaviour <| match rand.Next 3 with |0->Bad|1->Ok|_->Good
+    let randomBehaviour() = Kid.Behaviour <| match rand.Next 3 with |0->Bad|1->Mixed|_->Good
     ["Porter Profit";"Simon Swatzell";"Harold Hamada";"Eldon Edman";"Silas Shotts";"Trent Torrez";"Kraig Knowlton";"Aaron Allender";"Evan Espino";"Heriberto Holliman";"Hugh Haro";"Newton Nagle";"Lowell Level";"Mohamed Mutter";"Douglas Delapena";"Russ River";"Boris Bertin";"Rod Ruyle";"Anthony Aguiar";"Louis Lavelle";"Francisca Fung";"Irena Ines";"Geralyn Groseclose";"Sadye Selby";"Kati Kingsley";"Nelia Nimmons";"Annita Ashbrook";"Vilma Villalobos";"Stephania Symons";"Shirely Sweitzer";"Delphia Devilbiss";"Dodie Danko";"Arvilla Alcazar";"Sherlyn Shawgo";"Terresa Tygart";"Ines Izzo";"Mirian Markert";"Sheena Slover";"Ethelene Ebinger";"Cammie Croslin"]
     |> List.iter (fun n ->
         Store.update (ID.gen()) [Kid.Name n;randomAge();randomBehaviour()] None store |> ignore
