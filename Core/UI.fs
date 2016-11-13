@@ -162,7 +162,7 @@ module UI =
     let private remapEvents l = List.iter (function |EventUI f -> f() |_-> ()) l
 
     /// Runs a UI application given a native UI.
-    let run (nativeUI:INativeUI) app subscriptionHandler commandHandler =
+    let run app subscriptionHandler commandHandler (nativeUI:INativeUI) =
         MailboxProcessor.Start(fun mb ->
             let rec loop model ui subs =
                 async {
@@ -177,7 +177,7 @@ module UI =
                     nativeUI.Send diff
                     return! loop model newUI subs
                 }
-            let model,cmd = app.Init()
+            let model,cmd = app.Init() //TODO Should this be async, can it be done in the async loop
             let subs = app.Subscription model |> Seq.map  (fun s -> s,subscriptionHandler s |> Observable.subscribe mb.Post) |> Map.ofSeq
             commandHandler cmd
             let ui = app.View model

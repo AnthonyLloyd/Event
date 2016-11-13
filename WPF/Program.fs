@@ -40,17 +40,26 @@ let main _ =
             Store.update (ID.gen()) [Elf.Name n;randomWorkRate()] None store |> ignore
         )
         store
-    
-    let openElfEdit eid =
-        let app = Apps.ElfEdit.app()
-        let subscription() = Store.observable elfStore |> Observable.choose (fun (i,l) -> if i=eid then Apps.ElfEdit.Update l |> Some else None)
-        let commandHandler = Option.iter (fun (lastEvent,cmd) -> if List.isEmpty cmd |> not then Store.update eid cmd lastEvent elfStore |> ignore)
-   
-        let window = new Window()
-        let nativeUI = WPF.CreateNaiveUI window
-        UI.run nativeUI app subscription commandHandler
-        Application().Run(window) |> ignore
 
+    let mainWindow = Window()
+
+    let openApp app store update aid =
+        let app = app()
+        let aid = Option.getElseFun ID.gen aid
+        let subscription() = Store.observable store |> Observable.choose (fun (i,l) -> if i=aid then update l |> Some else None)
+        let commandHandler = Option.iter (fun (lastEvent,cmd) -> if List.isEmpty cmd |> not then Store.update aid cmd lastEvent store |> ignore)
+        mainWindow.Dispatcher.Invoke (fun () ->
+            let window = Window()
+            WPF.CreateNaiveUI window |> UI.run app subscription commandHandler
+            window.Show()
+        )
+
+    let commandHandler = List.iter (function
+            | Apps.Cmd.OpenKidEdit i -> openApp Apps.KidEdit.app kidStore Apps.KidEdit.Update i
+            | Apps.Cmd.OpenToyEdit i -> openApp Apps.ToyEdit.app toyStore Apps.ToyEdit.Update i
+            | Apps.Cmd.OpenElfEdit i -> openApp Apps.ElfEdit.app elfStore Apps.ElfEdit.Update i
+        )
+   
     let app = Apps.Main.app()
 
     let subscription() =
@@ -58,9 +67,7 @@ let main _ =
         |> Observable.merge (Store.observable toyStore |> Observable.map Apps.Main.ToyUpdate)
         |> Observable.merge (Store.observable elfStore |> Observable.map Apps.Main.ElfUpdate)
 
-    let commandHandler cmds = ()
-   
-    let window = new Window()
-    let nativeUI = WPF.CreateNaiveUI window
-    UI.run nativeUI app subscription commandHandler
-    Application().Run(window)
+    WPF.CreateNaiveUI mainWindow |> UI.run app subscription commandHandler
+    Application().Run(mainWindow) |> ignore
+    
+    0

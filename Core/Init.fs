@@ -74,6 +74,7 @@ module String =
 
 module Option =
     let getElse v o = match o with | Some i -> i | None -> v
+    let getElseFun f o = match o with | Some i -> i | None -> f()
     let orTry a o = match o with | None -> a | _ -> o
 
 module List =
