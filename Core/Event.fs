@@ -2,7 +2,8 @@
 
 open System
 
-type EventID = EventID of time:DateTime*user:string
+type EventID = |EventID of time:DateTime*user:string
+               static member Zero = EventID(DateTime.MinValue,String.empty)
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module EventID =
@@ -27,7 +28,7 @@ type 'Aggregate Store =
 
 module Store =
     let emptyMemoryStore() = {Updates=Map.empty; Observers=[]} |> ref |> MemoryStore
-    let observable store =
+    let fullObservable (store:'Aggregate Store) =
         match store with
         | MemoryStore storeRef ->
             {new IObservable<_> with
@@ -39,14 +40,26 @@ module Store =
                             atomicUpdate (fun i -> {Updates=i.Updates; Observers=List.where ((<>)ob) i.Observers}) storeRef |> ignore
                     }
             }
-    let update (aid:'Aggregate ID) (updates:'Aggregate list) (lastEvent:EventID option) (store:'Aggregate Store) =
+
+    let deltaObservable (store:'Aggregate Store) =
+        fullObservable store
+        |> Observable.scan (fun (lastMap,_) (aid,events) ->
+            let eventsDiff =
+                match Map.tryFind aid lastMap with
+                | None -> events
+                | Some eid -> List.takeWhile (fst>>(<>)eid) events
+            Map.add aid (List.head events |> fst) lastMap, (aid,eventsDiff)
+            ) (Map.empty,(Unchecked.defaultof<_>,List.empty))
+        |> Observable.map snd
+
+    let update (aid:'Aggregate ID) (updates:'Aggregate list) (lastEvent:EventID) (store:'Aggregate Store) =
         assert(List.isEmpty updates |> not)
         match store with
         | MemoryStore storeRef ->
             let newStore,oeid =
                 atomicUpdateQuery (fun store ->
                     match Map.tryFind aid store.Updates with
-                    | Some ((eid,_)::_) when Some eid <> lastEvent -> store, None
+                    | Some ((eid,_)::_) when eid<>lastEvent -> store, None
                     | o ->
                         let eid = EventID.gen()
                         printfn "MemoryStore.update: %A %A" eid updates
@@ -78,6 +91,8 @@ module Property =
     let create name setter getter validation = {Name=name; Getter=getter; Setter=setter; Validation=validation}
     let set (property:Property<'a,'b>) v = property.Setter v
     let get (property:Property<'a,'b>) (updates:'a Events) =
-        List.tryPick (snd >> List.tryPick property.Getter) updates |> property.Validation
+        List.tryPick (snd >> List.tryPick property.Getter) updates
+    let getAndValidate (property:Property<'a,'b>) (updates:'a Events) =
+        get property updates |> property.Validation
     let getEvents (property:Property<'a,'b>) (update:'a Events) : 'b Events =
         List.choose (fun (e,l) -> match List.choose property.Getter l with |[] -> None |l -> Some (e,l)) update

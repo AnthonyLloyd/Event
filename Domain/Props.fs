@@ -1,5 +1,6 @@
 ﻿namespace Lloyd.Domain.Model
 
+open System
 open Lloyd.Core
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
@@ -15,9 +16,9 @@ module Toy =
 
     let view events =
         Ok  (fun n a w -> {Name=n; AgeRange=a; WorkRequired=w})
-        <*> Property.get name events
-        <*> Property.get ageRange events
-        <*> Property.get workRequired events
+        <*> Property.getAndValidate name events
+        <*> Property.getAndValidate ageRange events
+        <*> Property.getAndValidate workRequired events
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module Elf =
@@ -32,9 +33,9 @@ module Elf =
 
     let view events =
         Ok  (fun n w m -> {Name=n; WorkRate=w; Making=m})
-        <*> Property.get name events
-        <*> Property.get workRate events
-        <*> Property.get making events
+        <*> Property.getAndValidate name events
+        <*> Property.getAndValidate workRate events
+        <*> Property.getAndValidate making events
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module Kid =
@@ -47,11 +48,75 @@ module Kid =
     let wishList = Property.create "Wish List" WishList (function |WishList w -> Some w |_->None)
                         (function |Some w -> Ok w |None -> failwith "Not possible")
 
-    type View = {Name:string; Age:Age; Behaviour:Behaviour; WishList:Toy ID Set}
+    type Summary = {Name:string; Age:Age; Behaviour:Behaviour; WishList:Toy ID Set}
 
-    let view events =
+    let summary events =
         Ok  (fun n a b w -> {Name=n; Age=a; Behaviour=b; WishList=w})
-        <*> Property.get name events
-        <*> Property.get age events
-        <*> Property.get behaviour events
+        <*> Property.getAndValidate name events
+        <*> Property.getAndValidate age events
+        <*> Property.getAndValidate behaviour events
         <*> (Property.getEvents wishList events |> SetEvent.toSet |> Ok)
+
+
+
+module Summary =
+    
+    type ToysMade = {Total:Map<Toy ID,int>; Making:Map<Elf ID,Toy ID>}
+
+    let toysMade (deltas:IObservable<Elf ID * Elf Events>) =
+        deltas
+        |> Observable.choose (fun (eid,events) ->
+                match List.collect (snd >> List.choose Elf.making.Getter) events with
+                |[] -> None
+                |l -> Some (eid,l)
+            )
+        |> Observable.scan (fun summary (eid,events) ->
+            {
+                Total = List.choose id events |> List.fold Map.incr summary.Total
+                Making = Map.addOrRemove eid (List.head events) summary.Making
+            }) {Total=Map.empty; Making=Map.empty}
+
+    let toyMade2 (t:ToysMade) = Map.toSeq t.Making |> Seq.map snd |> Seq.fold Map.decr t.Total
+
+    type ToysRequest = {Age:Age; Behaviour:Behaviour; WishList:Map<Toy ID,EventID>}
+
+    let toysRequested (deltas:IObservable<Kid ID * Kid Events>) =
+        deltas
+        |> Observable.filter (snd >> List.exists (snd >> List.forall (function |Name _ -> true |_ -> false) >> not))
+        |> Observable.scan (fun map (kid,events) ->
+                let s = Map.tryFind kid map
+                let ns = {
+                    Age = Property.get Kid.age events |> Option.getElseFun (fun () -> Option.map (fun i -> i.Age) s |> Option.getElse 0uy)
+                    Behaviour = Property.get Kid.behaviour events |> Option.getElseFun (fun () -> Option.map (fun i -> i.Behaviour) s |> Option.getElse Good)
+                    WishList =
+                        let remove,add =
+                            Property.getEvents Kid.wishList events
+                            |> Seq.fold (fun state (eid,l) ->
+                                    List.fold (fun (removed,added) ->
+                                        function
+                                        | Add a -> if Set.contains a removed then removed,added else removed,Map.add a eid added
+                                        | Remove a -> Set.add a removed,added) state l
+                                ) (Set.empty,Map.empty)
+                        let afterRemove = Set.fold (fun l r -> Map.remove r l) (Option.map (fun i -> i.WishList) s |> Option.getElse Map.empty) remove
+                        Map.fold (fun m k v -> Map.add k v m) afterRemove add
+                }
+                Map.add kid ns map
+            ) Map.empty
+
+    let toyName (deltas:IObservable<Toy ID * Toy Events>) =
+        deltas
+        |> Observable.choose (fun (eid,events) -> Property.get Toy.name events |> Option.map (fun l -> eid,l))
+        |> Observable.scan (fun m (eid,a) -> Map.add eid a m) Map.empty
+
+    let toyAgeRange (deltas:IObservable<Toy ID * Toy Events>) =
+        deltas
+        |> Observable.choose (fun (eid,events) -> Property.get Toy.ageRange events |> Option.map (fun l -> eid,l))
+        |> Observable.scan (fun m (eid,a) -> Map.add eid a m) Map.empty
+
+    
+    //type Row = {ID:Toy ID; Name:string; Requested:int}
+    //type Row = {ID:Kid ID; Name:string; WishList:int; Made:int}
+
+    //Kid ID,Age,(EventID*Toy ID) list
+    //Toy ID,AgeRange
+

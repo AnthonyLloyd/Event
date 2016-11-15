@@ -9,7 +9,7 @@ type Result<'o,'e> =
 
 [<AutoOpen>][<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module Result =
-    let map f r = match r with | Ok x -> Ok (f x) | Error e -> Error e
+    let map f r = match r with |Ok x -> Ok (f x) |Error e -> Error e
     let bind binder r = match r with |Ok i -> binder i |Error e -> Error e
     let apply f x =
         match f,x with
@@ -18,7 +18,8 @@ module Result =
         | Ok _, Error f -> Error [f]
         | Error f1, Error f2 -> Error (f2::f1)
     let (<*>) = apply
-    let ofOption f o = match o with | None -> f() |> Error | Some v -> Ok v
+    let ofOption f o = match o with |None -> f() |> Error |Some v -> Ok v
+    let toOption r = match r with |Ok o -> Some o |Error _ -> None
     let getElse v r = match r with |Ok o -> o |Error _ -> v
     type AttemptBuilder() =
         member __.Bind(v,f) = bind f v
@@ -88,6 +89,9 @@ module List =
         s1 @ a::List.tail s2
 
 module Map =
+    let incr m k = Map.add k (Map.tryFind k m |> Option.getElse 0 |> (+)1) m
+    let decr m k = Map.add k (Map.tryFind k m |> Option.getElse 0 |> (+) -1) m
+    let addOrRemove k o m = match o with | Some v -> Map.add k v m | None -> Map.remove k m
     let updateFromKeys create onRemove keys existing =
         let eSet = (Set.toSeq keys).GetEnumerator()
         let eMap = (Map.toSeq existing).GetEnumerator()
