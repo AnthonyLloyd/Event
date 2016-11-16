@@ -92,39 +92,3 @@ module Map =
     let incr m k = Map.add k (Map.tryFind k m |> Option.getElse 0 |> (+)1) m
     let decr m k = Map.add k (Map.tryFind k m |> Option.getElse 0 |> (+) -1) m
     let addOrRemove k o m = match o with | Some v -> Map.add k v m | None -> Map.remove k m
-    let updateFromKeys create onRemove keys existing =
-        let eSet = (Set.toSeq keys).GetEnumerator()
-        let eMap = (Map.toSeq existing).GetEnumerator()
-        let rec addRest map =
-            let k = eSet.Current
-            let map = Map.add k (create k) map
-            if eSet.MoveNext() |> not then map
-            else addRest map
-        let rec removeRest map =
-            let k,v = eMap.Current
-            let map = Map.remove k map
-            onRemove v
-            if eMap.MoveNext() |> not then map
-            else removeRest map
-        let rec loop map =
-            match eSet.MoveNext(),eMap.MoveNext() with
-            | false,false -> map
-            | false,true -> removeRest map
-            | true,false -> addRest map
-            | true,true ->
-                let rec moveEqual map =
-                    let kM,vM = eMap.Current
-                    let kS = eSet.Current
-                    if kS=kM then false,map
-                    elif kS<kM then
-                        let map = Map.add kS (create kS) map
-                        if eSet.MoveNext() |> not then true,removeRest map
-                        else moveEqual map
-                    else
-                        let map = Map.remove kM map
-                        onRemove vM
-                        if eMap.MoveNext() |> not then true,addRest map
-                        else moveEqual map
-                let finished,map = moveEqual map
-                if finished then map else loop map
-        loop existing

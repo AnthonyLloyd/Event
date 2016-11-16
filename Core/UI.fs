@@ -1,5 +1,6 @@
 ﻿namespace Lloyd.Core.UI
 
+open System
 open Lloyd.Core
 
 /// Message event used on the primative UI components.
@@ -36,10 +37,10 @@ type 'msg UI = {UI:UI;mutable Event:'msg->unit}
 [<NoEquality;NoComparison>]
 type App<'msg,'model,'sub,'cmd when 'sub : comparison> =
     {
-        Init: unit -> 'model*'cmd
-        Update: 'msg -> 'model->'model*'cmd
+        Init: unit -> 'model * 'cmd
+        Update: 'msg -> 'model -> 'model * 'cmd
         View: 'model -> 'msg UI
-        Subscription: 'model -> Set<'sub>
+        Subscription: 'model -> Map<'sub,IObservable<'msg>>
     }
 
 /// Native UI interface.
@@ -155,21 +156,23 @@ module UI =
         diff ui1.UI ui2.UI [] 0 []
 
     /// Returns a UI application from a UI init, update and view.
-    let appSimple init update view = {Init=(fun () ->init(),());Update=(fun msg model -> update msg model,());View=view;Subscription=(fun _ -> Set.empty)}
+    let appSimple init update view = {Init=(fun () ->init(),());Update=(fun msg model -> update msg model,());View=view;Subscription=(fun _ -> Map.empty)}
 
     let app init update view subscription = {Init=init;Update=update;View=view;Subscription=subscription}
 
     let private remapEvents l = List.iter (function |EventUI f -> f() |_-> ()) l
 
     /// Runs a UI application given a native UI.
-    let run app subscriptionHandler commandHandler (nativeUI:INativeUI) =
+    let run (app:App<'msg,'model,'sub,'cmd>) commandHandler (nativeUI:INativeUI) =
         MailboxProcessor.Start(fun mb ->
             let rec loop model ui subs =
                 async {
                     let! msg = mb.Receive()
                     let model,cmd = app.Update msg model
-                    let subs = Map.updateFromKeys (subscriptionHandler >> Observable.subscribe mb.Post) (fun d -> d.Dispose()) (app.Subscription model) subs
-                    commandHandler cmd
+                    let newSubs = app.Subscription model
+                    subs |> Map.iter (fun k d -> if Map.containsKey k newSubs |> not then (d:IDisposable).Dispose())
+                    let subs = Map.map (fun k sub -> match Map.tryFind k subs with |Some d -> d |None-> Observable.subscribe mb.Post sub) newSubs
+                    commandHandler cmd |> Option.iter mb.Post
                     let newUI = app.View model
                     newUI.Event<-mb.Post
                     let diff = diff ui newUI
@@ -178,8 +181,8 @@ module UI =
                     return! loop model newUI subs
                 }
             let model,cmd = app.Init() //TODO Should this be async, can it be done in the async loop
-            let subs = app.Subscription model |> Seq.map  (fun s -> s,subscriptionHandler s |> Observable.subscribe mb.Post) |> Map.ofSeq
-            commandHandler cmd
+            let subs = app.Subscription model |> Map.map (fun _ -> Observable.subscribe mb.Post)
+            commandHandler cmd |> Option.iter mb.Post
             let ui = app.View model
             ui.Event<-mb.Post
             nativeUI.Send [InsertUI([],ui.UI)]

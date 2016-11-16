@@ -1,5 +1,7 @@
 ﻿namespace Lloyd.Domain.Model
 
+open Lloyd.Core
+
 type Work = uint16
 type Age = byte
 type Behaviour = Bad|Mixed|Good

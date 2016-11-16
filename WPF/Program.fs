@@ -2,6 +2,7 @@
 
 open System
 open System.Windows
+open Lloyd.Core
 open Lloyd.WPF.NativeUI
 open Lloyd.Domain
 open Lloyd.Domain.Model
@@ -44,38 +45,26 @@ let main _ =
 
     let mainWindow = Window()
 
-    let openApp app store subscription aid =
-        let app = app()
+    let openApp store aid app =
         let aid = Option.getElseFun ID.gen aid
-        let commandHandler = Option.iter (fun (lastEvent,cmd) -> if List.isEmpty cmd |> not then Store.update aid cmd lastEvent store |> ignore)
+        let commandHandler cmd = Option.iter (fun (lastEvent,cmd) -> if List.isEmpty cmd |> not then Store.update aid cmd lastEvent store |> ignore) cmd; None
         mainWindow.Dispatcher.Invoke (fun () ->
             let window = Window()
-            WPF.CreateNaiveUI window |> UI.run app (fun () -> subscription aid) commandHandler
+            WPF.CreateNaiveUI window |> UI.run app commandHandler
             window.Show()
         )
 
-    let commandHandler = List.iter (function
-            | Apps.Cmd.OpenKidEdit i ->
-                let subscription aid = Store.fullObservable kidStore |> Observable.choose (fun (i,l) -> if i=aid then Apps.KidEdit.Update l |> Some else None)
-                openApp Apps.KidEdit.app kidStore subscription i
-            | Apps.Cmd.OpenToyEdit i ->
-                let subscription aid = Store.fullObservable toyStore |> Observable.choose (fun (i,l) -> if i=aid then Apps.ToyEdit.Update l |> Some else None)
-                openApp Apps.ToyEdit.app toyStore subscription i
-            | Apps.Cmd.OpenElfEdit i ->
-                let subscription aid = 
-                    Store.fullObservable elfStore |> Observable.choose (fun (i,l) -> if i=aid then Apps.ElfEdit.Update l |> Some else None)
-                    |> Observable.merge (Store.deltaObservable toyStore |> Summary.toyName |> Observable.map Apps.ElfEdit.Msg.ToyNames)
-                openApp Apps.ElfEdit.app elfStore subscription i
-        )
+    let commandHandler cmd =
+        List.iter (function
+            | Apps.Cmd.OpenKidEdit i -> Apps.KidEdit.app (Store.observable kidStore) (Store.observable toyStore) |> openApp kidStore i
+            | Apps.Cmd.OpenToyEdit i -> Apps.ToyEdit.app (Store.observable toyStore) |> openApp toyStore i
+            | Apps.Cmd.OpenElfEdit i -> Apps.ElfEdit.app (Store.observable elfStore) (Store.observable toyStore) |> openApp elfStore i
+        ) cmd
+        None
    
-    let app = Apps.Main.app()
+    let app = Apps.Main.app (Store.observable kidStore) (Store.observable toyStore) (Store.observable elfStore)
 
-    let subscription() =
-        Store.fullObservable kidStore |> Observable.map Apps.Main.KidUpdate
-        |> Observable.merge (Store.fullObservable toyStore |> Observable.map Apps.Main.ToyUpdate)
-        |> Observable.merge (Store.fullObservable elfStore |> Observable.map Apps.Main.ElfUpdate)
-
-    WPF.CreateNaiveUI mainWindow |> UI.run app subscription commandHandler
+    WPF.CreateNaiveUI mainWindow |> UI.run app commandHandler
     Application().Run(mainWindow) |> ignore
     
     0

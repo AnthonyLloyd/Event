@@ -28,7 +28,7 @@ type 'Aggregate Store =
 
 module Store =
     let emptyMemoryStore() = {Updates=Map.empty; Observers=[]} |> ref |> MemoryStore
-    let fullObservable (store:'Aggregate Store) =
+    let observable (store:'Aggregate Store) =
         match store with
         | MemoryStore storeRef ->
             {new IObservable<_> with
@@ -40,9 +40,8 @@ module Store =
                             atomicUpdate (fun i -> {Updates=i.Updates; Observers=List.where ((<>)ob) i.Observers}) storeRef |> ignore
                     }
             }
-
-    let deltaObservable (store:'Aggregate Store) =
-        fullObservable store
+    let toDelta (observable:IObservable<'Aggregate ID * 'Aggregate Events>) =
+        observable
         |> Observable.scan (fun (lastMap,_) (aid,events) ->
             let eventsDiff =
                 match Map.tryFind aid lastMap with

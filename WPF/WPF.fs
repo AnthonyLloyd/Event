@@ -3,6 +3,7 @@
 open System
 open System.Windows
 open System.Windows.Controls
+open Lloyd.Core
 open Lloyd.Core.UI
 
 let CreateNaiveUI (root:ContentControl) =
