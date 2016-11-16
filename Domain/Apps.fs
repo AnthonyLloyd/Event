@@ -230,43 +230,56 @@ module ElfList =
 
 
 module KidList =
-    type Row = {ID:Kid ID; Name:string; WishList:int; Made:int}
-    type Model = {Rows:Row list; ToyTotal:Map<Toy ID,int>; ElfLastEvent:EventID}
+    type Row = {ID:Kid ID; Name:string; Requested:int; Finished:int}
+    type Model = Row list
 
-    let init() = {Rows=[]; ToyTotal=Map.empty; ElfLastEvent=EventID.Zero}, None
+    let init() = [], None
 
     type Msg =
         | KidName of Kid ID * string
-        | ToysMade of Map<Toy ID, int>
-        | ToyAgeRanges of Map<Toy ID, Age*Age>
+        | KidRequested of (Kid ID * int) list
+        | KidFinished of (Kid ID * int) list
         | OpenEdit of Kid ID option
 
     let update msg model : Model * Cmd option =
         match msg with
-        | KidName (_kid,_name) -> failwith "hi"
-        | ToysMade _m -> failwith "hi"
-        | ToyAgeRanges _m -> failwith "hi"
+        | KidName (kid,name) ->
+            match List.tryFindIndex (fun r -> r.ID=kid) model with
+            | None -> {ID=kid; Name=name; Requested=0; Finished=0}::model |> List.sortBy (fun r -> r.Name), None
+            | Some i -> List.replacei i {List.item i model with Name=name} model |> List.sortBy (fun r -> r.Name), None
+        | KidRequested l ->
+            List.fold (fun model (kid,requested) ->
+                    match List.tryFindIndex (fun r -> r.ID=kid) model with
+                    | None -> {ID=kid; Name=String.empty; Requested=requested; Finished=0}::model
+                    | Some i -> List.replacei i {List.item i model with Requested=requested} model
+                ) model l, None
+        | KidFinished l ->
+            List.fold (fun model (kid,finished) ->
+                    match List.tryFindIndex (fun r -> r.ID=kid) model with
+                    | None -> {ID=kid; Name=String.empty; Requested=0; Finished=finished}::model
+                    | Some i -> List.replacei i {List.item i model with Finished=finished} model
+                ) model l, None
         | OpenEdit kid -> model, OpenKidEdit kid |> Some
 
     type Sub =
         | KidName
-        | ToysMade
-        | ToysAgeRanges
+        | KidRequested
+        | KidFinished
     
     let subscription kidEvents toyEvents elfEvents =
         let subs =
             Map.ofList [
                 KidName, Query.kidName kidEvents |> Observable.map Msg.KidName
-                ToysMade, Query.toysMade elfEvents |> Observable.map Msg.ToysMade
-                ToysAgeRanges, Query.toyAgeRanges toyEvents |> Observable.map Msg.ToyAgeRanges
+                KidRequested, Query.kidRequested kidEvents toyEvents |> Observable.map Msg.KidRequested 
+                KidFinished, Query.kidFinished kidEvents toyEvents elfEvents |> Observable.map Msg.KidFinished
             ]
         fun (_:Model) -> subs
 
     let view model =
-        let header = UI.div Horizontal [UI.text "Kid"; UI.text "Wish List"; UI.text "Made"; UI.button "new" (OpenEdit None)]
+        let header = UI.div Horizontal [UI.text "Kid"; UI.text "Requested"; UI.text "Finished"; UI.button "new" (OpenEdit None)]
         let rowUI row =
-            UI.div Horizontal [UI.text row.Name; UI.text (string row.WishList); UI.text (string row.Made); UI.button "edit" (OpenEdit (Some row.ID))]
-        header::List.map rowUI model.Rows |> UI.div Vertical
+            UI.div Horizontal [UI.text row.Name; UI.text (string row.Requested); UI.text (string row.Finished); UI.button "edit" (OpenEdit (Some row.ID))]
+        header::List.map rowUI model |> UI.div Vertical
 
     let app kidEvents toyEvents elfEvents = UI.app init update view (subscription kidEvents toyEvents elfEvents)
 
@@ -279,8 +292,8 @@ module ToyList =
 
     type Msg =
         | ToyName of Toy ID * string
-        | ToyFinished of Toy ID * int
         | ToyRequested of Toy ID * int
+        | ToyFinished of Toy ID * int
         | OpenEdit of Toy ID option
 
     let update msg model : Model * Cmd option =
@@ -289,14 +302,14 @@ module ToyList =
             match List.tryFindIndex (fun r -> r.ID=toy) model with
             | None -> {ID=toy; Name=name; Requested=0; Finished=0}::model |> List.sortBy (fun r -> r.Name), None
             | Some i -> List.replacei i {List.item i model with Name=name} model |> List.sortBy (fun r -> r.Name), None
-        | ToyFinished (toy,i) ->
+        | ToyRequested (toy,requested) ->
             match List.tryFindIndex (fun r -> r.ID=toy) model with
-            | None -> {ID=toy; Name=String.empty; Requested=0; Finished=i}::model, None
-            | Some i -> List.replacei i {List.item i model with Finished=i} model, None
-        | ToyRequested (toy,i) ->
+            | None -> {ID=toy; Name=String.empty; Requested=requested; Finished=0}::model, None
+            | Some i -> List.replacei i {List.item i model with Requested=requested} model, None
+        | ToyFinished (toy,finished) ->
             match List.tryFindIndex (fun r -> r.ID=toy) model with
-            | None -> {ID=toy; Name=String.empty; Requested=i; Finished=0}::model, None
-            | Some i -> List.replacei i {List.item i model with Requested=i} model, None
+            | None -> {ID=toy; Name=String.empty; Requested=0; Finished=finished}::model, None
+            | Some i -> List.replacei i {List.item i model with Finished=finished} model, None
         | OpenEdit toy -> model, OpenToyEdit toy |> Some
 
     type Sub =

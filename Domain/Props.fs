@@ -61,23 +61,34 @@ module Kid =
 
 module Query =
     
+    let private toDelta observable =
+        observable
+        |> Observable.scan (fun (lastMap,_) (aid,events) ->
+            let eventsDiff =
+                match Map.tryFind aid lastMap with
+                | None -> events
+                | Some eid -> List.takeWhile (fst>>(<>)eid) events
+            Map.add aid (List.head events |> fst) lastMap, (aid,eventsDiff)
+            ) (Map.empty,(Unchecked.defaultof<_>,List.empty))
+        |> Observable.map snd
+
     let kidName (kidEvents:IObservable<Kid ID * Kid Events>) =
-        Store.toDelta kidEvents
+        toDelta kidEvents
         |> Observable.choose (fun (eid,events) -> Property.get Kid.name events |> Option.map (fun l -> eid,l))
 
     let toyName (toyEvents:IObservable<Toy ID * Toy Events>) =
-        Store.toDelta toyEvents
+        toDelta toyEvents
         |> Observable.choose (fun (eid,events) -> Property.get Toy.name events |> Option.map (fun l -> eid,l))
 
     let toyNames (toyEvents:IObservable<Toy ID * Toy Events>) =
-        Store.toDelta toyEvents
+        toDelta toyEvents
         |> Observable.choose (fun (eid,events) -> Property.get Toy.name events |> Option.map (fun l -> eid,l))
         |> Observable.scan (fun m (eid,a) -> Map.add eid a m) Map.empty
 
-    let toyAgeRanges (toyEvents:IObservable<Toy ID * Toy Events>) =
-        Store.toDelta toyEvents
-        |> Observable.choose (fun (eid,events) -> Property.get Toy.ageRange events |> Option.map (fun l -> eid,l))
-        |> Observable.scan (fun m (eid,a) -> Map.add eid a m) Map.empty
+//    let toyAgeRanges (toyEvents:IObservable<Toy ID * Toy Events>) =
+//        Store.toDelta toyEvents
+//        |> Observable.choose (fun (eid,events) -> Property.get Toy.ageRange events |> Option.map (fun l -> eid,l))
+//        |> Observable.scan (fun m (eid,a) -> Map.add eid a m) Map.empty
 
     let toyFinished (_elfEvents:IObservable<Elf ID * Elf Events>) : IObservable<Toy ID * int> =
         failwith "hi"
@@ -85,11 +96,18 @@ module Query =
     let toyRequested (_kidEvents:IObservable<Kid ID * Kid Events>) (_toyEvents:IObservable<Toy ID * Toy Events>) (_elfEvents:IObservable<Elf ID * Elf Events>) : IObservable<Toy ID * int> =
         failwith "hi"
 
-    type private ToysMade = {Total:Map<Toy ID,int>; Making:Map<Elf ID,Toy ID>}
+    let kidRequested (_kidEvents:IObservable<Kid ID * Kid Events>) (_toyEvents:IObservable<Toy ID * Toy Events>) : IObservable<(Kid ID * int) list> =
+        failwith "hi"
+        
+    let kidFinished (_kidEvents:IObservable<Kid ID * Kid Events>) (_toyEvents:IObservable<Toy ID * Toy Events>) (_elfEvents:IObservable<Elf ID * Elf Events>) : IObservable<(Kid ID * int) list> =
+        failwith "hi"
 
+
+
+    type private ToysMade = {Total:Map<Toy ID,int>; Making:Map<Elf ID,Toy ID>}
     
     let toysMade (elfEvents:IObservable<Elf ID * Elf Events>) =
-        Store.toDelta elfEvents
+        toDelta elfEvents
         |> Observable.choose (fun (eid,events) ->
                 match List.collect (snd >> List.choose Elf.making.Getter) events with
                 |[] -> None
@@ -107,7 +125,7 @@ module Query =
     type ToysRequest = {Age:Age; Behaviour:Behaviour; WishList:Map<Toy ID,EventID>}
 
     let toysRequested (kidEvents:IObservable<Kid ID * Kid Events>) =
-        Store.toDelta kidEvents
+        toDelta kidEvents
         |> Observable.filter (snd >> List.exists (snd >> List.forall (function |Name _ -> true |_ -> false) >> not))
         |> Observable.scan (fun map (kid,events) ->
                 let s = Map.tryFind kid map

@@ -40,16 +40,6 @@ module Store =
                             atomicUpdate (fun i -> {Updates=i.Updates; Observers=List.where ((<>)ob) i.Observers}) storeRef |> ignore
                     }
             }
-    let toDelta (observable:IObservable<'Aggregate ID * 'Aggregate Events>) =
-        observable
-        |> Observable.scan (fun (lastMap,_) (aid,events) ->
-            let eventsDiff =
-                match Map.tryFind aid lastMap with
-                | None -> events
-                | Some eid -> List.takeWhile (fst>>(<>)eid) events
-            Map.add aid (List.head events |> fst) lastMap, (aid,eventsDiff)
-            ) (Map.empty,(Unchecked.defaultof<_>,List.empty))
-        |> Observable.map snd
 
     let update (aid:'Aggregate ID) (updates:'Aggregate list) (lastEvent:EventID) (store:'Aggregate Store) =
         assert(List.isEmpty updates |> not)
