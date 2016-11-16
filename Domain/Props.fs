@@ -79,10 +79,10 @@ module Query =
         |> Observable.choose (fun (eid,events) -> Property.get Toy.ageRange events |> Option.map (fun l -> eid,l))
         |> Observable.scan (fun m (eid,a) -> Map.add eid a m) Map.empty
 
-    let toyFinished (elfEvents:IObservable<Elf ID * Elf Events>) : IObservable<Toy ID * int> =
+    let toyFinished (_elfEvents:IObservable<Elf ID * Elf Events>) : IObservable<Toy ID * int> =
         failwith "hi"
 
-    let toyRequested (kidEvents:IObservable<Kid ID * Kid Events>) (toyEvents:IObservable<Toy ID * Toy Events>) (elfEvents:IObservable<Elf ID * Elf Events>) : IObservable<Toy ID * int> =
+    let toyRequested (_kidEvents:IObservable<Kid ID * Kid Events>) (_toyEvents:IObservable<Toy ID * Toy Events>) (_elfEvents:IObservable<Elf ID * Elf Events>) : IObservable<Toy ID * int> =
         failwith "hi"
 
     type private ToysMade = {Total:Map<Toy ID,int>; Making:Map<Elf ID,Toy ID>}

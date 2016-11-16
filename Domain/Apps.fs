@@ -1,6 +1,5 @@
 ﻿namespace Lloyd.Domain.Apps
 
-open System
 open Lloyd.Core
 open Lloyd.Core.UI
 open Lloyd.Core.Apps
@@ -244,9 +243,9 @@ module KidList =
 
     let update msg model : Model * Cmd option =
         match msg with
-        | KidName (kid,name) -> failwith "hi"
-        | ToysMade m -> failwith "hi"
-        | ToyAgeRanges m -> failwith "hi"
+        | KidName (_kid,_name) -> failwith "hi"
+        | ToysMade _m -> failwith "hi"
+        | ToyAgeRanges _m -> failwith "hi"
         | OpenEdit kid -> model, OpenKidEdit kid |> Some
 
     type Sub =
