@@ -65,6 +65,7 @@ module Threading =
             if t then b
             else let b = f a in d.Add(a,b); b
     let inline flip f b a = f a b
+    let between a b x = (a<=x&&x<=b)||(a>=x&&x>=b)
 
 module String =
     let empty = String.Empty
@@ -77,6 +78,10 @@ module Option =
     let getElse v o = match o with | Some i -> i | None -> v
     let getElseFun f o = match o with | Some i -> i | None -> f()
     let orTry a o = match o with | None -> a | _ -> o
+    let ofList l = match l with |[] -> None |l -> Some l
+
+module Seq =
+    let groupByFst s = Seq.groupBy fst s |> Seq.map (fun (k,l) -> k,Seq.map snd l)
 
 module List =
     let tryCons o xs = match o with |None -> xs | Some x -> x::xs

@@ -292,8 +292,8 @@ module ToyList =
 
     type Msg =
         | ToyName of Toy ID * string
-        | ToyRequested of Toy ID * int
-        | ToyFinished of Toy ID * int
+        | ToyRequested of (Toy ID * int) list
+        | ToyFinished of (Toy ID * int) list
         | OpenEdit of Toy ID option
 
     let update msg model : Model * Cmd option =
@@ -302,14 +302,18 @@ module ToyList =
             match List.tryFindIndex (fun r -> r.ID=toy) model with
             | None -> {ID=toy; Name=name; Requested=0; Finished=0}::model |> List.sortBy (fun r -> r.Name), None
             | Some i -> List.replacei i {List.item i model with Name=name} model |> List.sortBy (fun r -> r.Name), None
-        | ToyRequested (toy,requested) ->
-            match List.tryFindIndex (fun r -> r.ID=toy) model with
-            | None -> {ID=toy; Name=String.empty; Requested=requested; Finished=0}::model, None
-            | Some i -> List.replacei i {List.item i model with Requested=requested} model, None
-        | ToyFinished (toy,finished) ->
-            match List.tryFindIndex (fun r -> r.ID=toy) model with
-            | None -> {ID=toy; Name=String.empty; Requested=0; Finished=finished}::model, None
-            | Some i -> List.replacei i {List.item i model with Finished=finished} model, None
+        | ToyRequested l ->
+            List.fold (fun model (toy,requested) ->
+                    match List.tryFindIndex (fun r -> r.ID=toy) model with
+                    | None -> {ID=toy; Name=String.empty; Requested=requested; Finished=0}::model
+                    | Some i -> List.replacei i {List.item i model with Requested=requested} model
+                ) model l, None
+        | ToyFinished l ->
+            List.fold (fun model (toy,finished) ->
+                    match List.tryFindIndex (fun r -> r.ID=toy) model with
+                    | None -> {ID=toy; Name=String.empty; Requested=0; Finished=finished}::model
+                    | Some i -> List.replacei i {List.item i model with Finished=finished} model
+                ) model l, None
         | OpenEdit toy -> model, OpenToyEdit toy |> Some
 
     type Sub =
@@ -322,7 +326,7 @@ module ToyList =
             Map.ofList [
                 ToyName, Query.toyName toyEvents |> Observable.map Msg.ToyName
                 ToyFinished, Query.toyFinished elfEvents |> Observable.map Msg.ToyFinished
-                ToyRequested, Query.toyRequested kidEvents toyEvents elfEvents |> Observable.map Msg.ToyRequested
+                ToyRequested, Query.toyRequested kidEvents toyEvents |> Observable.map Msg.ToyRequested
             ]
         fun (_:Model) -> subs
 

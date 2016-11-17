@@ -58,19 +58,45 @@ module Store =
             oeid
 
 type 'a SetEvent =
-    | Add of 'a
-    | Remove of 'a
+    | SetAdd of 'a
+    | SetRemove of 'a
 
 module SetEvent =
     let difference (before:'a Set) (after:'a Set) =
-        Seq.append (after-before |> Set.toSeq |> Seq.map Add) (before-after |> Set.toSeq |> Seq.map Remove) |> Seq.toList
+        Seq.append (after-before |> Set.toSeq |> Seq.map SetAdd) (before-after |> Set.toSeq |> Seq.map SetRemove) |> Seq.toList
+
+    let update events s =
+        let removedAndAdded =
+            List.fold (fun (removed,added) se ->
+                    match se with
+                    | SetAdd a -> if Set.contains a removed then removed,added else removed,Set.add a added
+                    | SetRemove a -> Set.add a removed,added
+               ) (Set.empty,Set.empty) events
+        Set.fold (fun (removed,added) a -> if Set.contains a removed then removed,added else removed,Set.add a added) removedAndAdded s
+        |> snd
+
     let toSet (events:'a SetEvent Events) =
         Seq.map snd events
         |> Seq.fold (List.fold (fun (removed,added) (se:'a SetEvent) ->
                 match se with
-                | Add a -> if Set.contains a removed then removed,added else removed,Set.add a added
-                | Remove a -> Set.add a removed,added
+                | SetAdd a -> if Set.contains a removed then removed,added else removed,Set.add a added
+                | SetRemove a -> Set.add a removed,added
            )) (Set.empty,Set.empty)
+        |> snd
+
+type MapEvent<'k,'v> =
+    | MapAdd of 'k * 'v
+    | MapRemove of 'k
+
+module MapEvent =
+    let update events m =
+        let removedAndAdded =
+            List.fold (fun (removed,added) se ->
+                    match se with
+                    | MapAdd (k,v) -> if Set.contains k removed then removed,added else removed,Map.add k v added
+                    | MapRemove k -> Set.add k removed,added
+               ) (Set.empty,Map.empty) events
+        Map.fold (fun (removed,added) k v -> if Set.contains k removed then removed,added else removed,Map.add k v added) removedAndAdded m
         |> snd
 
 [<NoEquality;NoComparison>]

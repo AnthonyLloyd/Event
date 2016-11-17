@@ -4,7 +4,7 @@ open Lloyd.Core
 
 type Work = uint16
 type Age = byte
-type Behaviour = Bad|Mixed|Good
+type Behaviour = Good|Mixed|Bad
 
 type Toy =
     | Name of string
