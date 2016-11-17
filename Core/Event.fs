@@ -2,20 +2,32 @@
 
 open System
 
-type EventID = |EventID of time:DateTime*user:string
-               static member Zero = EventID(DateTime.MinValue,String.empty)
+type UserID = User of int
+
+module User =
+    let private map = Map.ofList [1,"admin"] |> ref
+    let login name =
+        match Map.tryFindKey (fun _ -> (=)name) !map with
+        | Some userID -> User userID
+        | None ->
+            let userID = Map.toSeq !map |> Seq.map fst |> Seq.max |> (+)1
+            map := Map.add userID name !map
+            User userID
+    let name (User userID) = Map.find userID !map
+
+type EventID = |EventID of time:DateTime * user:UserID
+               static member Zero = EventID(DateTime.MinValue,User 0)
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module EventID =
-    let create time user = EventID(time,user)
+    let internal gen user = EventID(DateTime.UtcNow, user) // TODO: increment time so now dups
     let time (EventID(t,_)) = t
     let User (EventID(_,u)) = u
-    let gen() = EventID(DateTime.UtcNow,"Ant") // TODO: increment time so now dups
 
 type 'Aggregate ID = Created of EventID
 
 module ID =
-    let gen() = EventID.gen() |> Created
+    let internal gen eventID = Created eventID
 
 type 'Aggregate Events = (EventID * 'Aggregate list) list
 
@@ -41,21 +53,38 @@ module Store =
                     }
             }
 
-    let update (aid:'Aggregate ID) (updates:'Aggregate list) (lastEvent:EventID) (store:'Aggregate Store) =
+    type Error =
+        | Concurrency
+
+    let update (user:UserID) (aggregateID:'Aggregate ID) (updates:'Aggregate list) (lastEvent:EventID) (store:'Aggregate Store) =
         assert(List.isEmpty updates |> not)
         match store with
         | MemoryStore storeRef ->
-            let newStore,oeid =
+            let newStore,result =
                 atomicUpdateQuery (fun store ->
-                    match Map.tryFind aid store.Updates with
-                    | Some ((eid,_)::_) when eid<>lastEvent -> store, None
+                    match Map.tryFind aggregateID store.Updates with
+                    | Some ((eid,_)::_) when eid<>lastEvent -> store, Error Concurrency
                     | o ->
-                        let eid = EventID.gen()
-                        printfn "MemoryStore.update: %A %A" eid updates
-                        {Updates=Map.add aid ((eid,updates)::Option.getElse [] o) store.Updates; Observers=store.Observers}, Some eid
+                        let eventID = EventID.gen user
+                        {Updates=Map.add aggregateID ((eventID,updates)::Option.getElse [] o) store.Updates; Observers=store.Observers}, Ok ()
                 ) storeRef
-            if Option.isSome oeid then newStore.Observers |> Seq.iter (fun ob -> ob.OnNext(aid,Map.find aid newStore.Updates))
-            oeid
+            if Result.isOk result then newStore.Observers |> Seq.iter (fun ob -> ob.OnNext(aggregateID,Map.find aggregateID newStore.Updates))
+            result
+
+    let create (user:UserID) (updates:'Aggregate list) (store:'Aggregate Store) : Result<_,Error> =
+        assert(List.isEmpty updates |> not)
+        match store with
+        | MemoryStore storeRef ->
+            let newStore,result =
+                atomicUpdateQuery (fun store ->
+                    let eventID = EventID.gen user
+                    let aggregateID = ID.gen eventID
+                    {Updates=Map.add aggregateID [eventID,updates] store.Updates; Observers=store.Observers}, Ok aggregateID
+                ) storeRef
+            match result with
+            | Ok aggregateID -> newStore.Observers |> Seq.iter (fun ob -> ob.OnNext(aggregateID,Map.find aggregateID newStore.Updates))
+            | Error _ -> ()
+            result
 
 type 'a SetEvent =
     | SetAdd of 'a

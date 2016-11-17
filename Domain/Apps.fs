@@ -10,118 +10,12 @@ type Cmd =
     | OpenToyEdit of Toy ID option
     | OpenElfEdit of Elf ID option
 
-module ToyEdit =
-    type Model = {ID:Toy ID option; Name:string Editor.Model; AgeRange:(Age*Age) Editor.Model; WorkRequired:uint16 Editor.Model; LastEvent:EventID}
-
-    let init() =
-        {ID=None; Name=Editor.init Toy.name; AgeRange=Editor.init Toy.ageRange; WorkRequired=Editor.init Toy.workRequired; LastEvent=EventID.Zero}, None
-
-    type Msg =
-        | Update of Toy Events
-        | NameMsg of string Editor.Msg
-        | AgeRangeMsg of (Age*Age) Editor.Msg
-        | EffortMsg of uint16 Editor.Msg
-        | Save
-
-    let update msg model =
-        printfn "Toy.update: %A" msg
-        match msg with
-        | Update l -> {model with
-                        Name = Editor.updateProperty Toy.name l model.Name
-                        AgeRange = Editor.updateProperty Toy.ageRange l model.AgeRange
-                        WorkRequired = Editor.updateProperty Toy.workRequired l model.WorkRequired
-                        LastEvent = List.head l |> fst
-                      }, None
-        | NameMsg n -> {model with Name=Editor.update n model.Name}, None
-        | AgeRangeMsg r -> {model with AgeRange=Editor.update r model.AgeRange}, None
-        | EffortMsg c -> {model with WorkRequired=Editor.update c model.WorkRequired}, None
-        | Save ->
-            let cmd =
-                List.tryCons (Option.map (Property.set Toy.name) model.Name.Edit) []
-                |> List.tryCons (Option.map (Property.set Toy.ageRange) model.AgeRange.Edit)
-                |> List.tryCons (Option.map (Property.set Toy.workRequired) model.WorkRequired.Edit)
-            model, Some(model.LastEvent,cmd)
-
-    type Sub =
-        | Toy of Toy ID
-
-    let subscription toyEvents model =
-        Option.map (fun tid ->
-            Toy tid, Observable.choose (fun (i,e) -> if i=tid then Some e else None) toyEvents |> Observable.map Update
-            ) model.ID
-        |> Option.toList |> Map.ofList
-
-    let view model =
-        UI.div Vertical [
-            Editor.view UI.inputText model.Name |> UI.map NameMsg
-            Editor.view UI.inputRange model.AgeRange |> UI.map AgeRangeMsg
-            Editor.view UI.inputDigits model.WorkRequired |> UI.map EffortMsg
-            UI.button "Save" Save
-        ]
-
-    let app toyEvents =
-        UI.app init update view (subscription toyEvents)
-
-
-module ElfEdit =
-    type Model = {ID:Elf ID option; Name:string Editor.Model; WorkRate:Work Editor.Model; Making:Toy ID option; LastEvent:EventID; ToyNames:Map<Toy ID,string>}
-
-    let init() =
-        {ID=None; Name=Editor.init Elf.name; WorkRate=Editor.init Elf.workRate; Making=None; LastEvent=EventID.Zero; ToyNames=Map.empty}, None
-
-    type Msg =
-        | Update of Elf Events
-        | ToyNames of Map<Toy ID,string>
-        | NameMsg of string Editor.Msg
-        | WorkRateMsg of Work Editor.Msg
-        | Save
-
-    let update msg model =
-        printfn "Elf.update: %A" msg
-        match msg with
-        | Update l -> {model with
-                        Name = Editor.updateProperty Elf.name l model.Name
-                        WorkRate = Editor.updateProperty Elf.workRate l model.WorkRate
-                        LastEvent = List.head l |> fst
-                      }, None
-        | ToyNames m -> {model with ToyNames=m}, None
-        | NameMsg n -> {model with Name=Editor.update n model.Name}, None
-        | WorkRateMsg r -> {model with WorkRate=Editor.update r model.WorkRate}, None
-        | Save ->
-            let cmd =
-                List.tryCons (Option.map (Property.set Elf.name) model.Name.Edit) []
-                |> List.tryCons (Option.map (Property.set Elf.workRate) model.WorkRate.Edit)
-            model, Some(model.LastEvent,cmd)
-
-    type Sub =
-        | Elf of Elf ID
-        | ToyName
-
-    let subscription elfEvents toyEvents model =
-        (ToyName, Query.toyNames toyEvents |> Observable.map ToyNames)
-        :: (Option.map (fun tid ->
-                Elf tid, Observable.choose (fun (i,e) -> if i=tid then Some e else None) elfEvents |> Observable.map Update
-                ) model.ID
-           |> Option.toList)
-        |> Map.ofList
-
-    let view model =
-        let making = Option.bind (fun tid -> Map.tryFind tid model.ToyNames) model.Making |> Option.getElse "Nothing"
-        UI.div Vertical [
-            Editor.view UI.inputText model.Name |> UI.map NameMsg
-            Editor.view UI.inputDigits model.WorkRate |> UI.map WorkRateMsg
-            UI.button "Save" Save
-            UI.text (Elf.making.Name+": "+making)
-        ]
-
-    let app elfEvents toyEvents  = UI.app init update view (subscription elfEvents toyEvents)
-
 
 module KidEdit =
     type Model = {ID:Kid ID option; Name:string Editor.Model; Age:Age Editor.Model; Behaviour:Behaviour Editor.Model; WishList:Toy ID EditorSet.Model; LastEvent:EventID; ToyNames:Map<Toy ID,string>}
 
-    let init() =
-        {ID=None; Name=Editor.init Kid.name; Age=Editor.init Kid.age; Behaviour=Editor.init Kid.behaviour; WishList=EditorSet.init Kid.wishList; LastEvent=EventID.Zero; ToyNames=Map.empty}, None
+    let init kid =
+        {ID=kid; Name=Editor.init Kid.name; Age=Editor.init Kid.age; Behaviour=Editor.init Kid.behaviour; WishList=EditorSet.init Kid.wishList; LastEvent=EventID.Zero; ToyNames=Map.empty}, None
 
     type Msg =
         | Update of Kid Events
@@ -131,6 +25,8 @@ module KidEdit =
         | BehaviourMsg of Behaviour Editor.Msg
         | WishListMsg of Toy ID EditorSet.Msg
         | Save
+        | CreateResult of Result<Kid ID,Store.Error>
+        | UpdateResult of Result<unit,Store.Error>
 
     let update msg model =
         match msg with
@@ -147,15 +43,20 @@ module KidEdit =
         | BehaviourMsg c -> {model with Behaviour=Editor.update c model.Behaviour}, None
         | WishListMsg w -> {model with WishList=EditorSet.update w model.WishList}, None
         | Save ->
-            let cmd =
+            let events =
                 List.tryCons (Option.map (Property.set Kid.name) model.Name.Edit) []
                 |> List.tryCons (Option.map (Property.set Kid.age) model.Age.Edit)
                 |> List.tryCons (Option.map (Property.set Kid.behaviour) model.Behaviour.Edit)
-            let cmd =
+            let events =
                 let after = model.WishList.Edit |> Option.map (List.choose id>>Set.ofList)
                 let before = model.WishList.Latest |> Option.map (snd>>Set.ofList) |> Option.getElse Set.empty
-                List.tryAppend (Option.map (SetEvent.difference before>>List.map Kid.WishList) after) cmd
-            model, Some(model.LastEvent,cmd)
+                List.tryAppend (Option.map (SetEvent.difference before>>List.map Kid.WishList) after) events
+            model, Some((model.ID,events),model.LastEvent)
+        | CreateResult r ->
+            match r with
+            | Ok kid -> {model with ID=Some kid}, None
+            | Error _ -> model, None
+        | UpdateResult _ -> model, None
 
     type Sub =
         | Kid of Kid ID
@@ -179,7 +80,239 @@ module KidEdit =
             UI.button "Save" Save
         ]
 
-    let app kidEvents toyEvents = UI.app init update view (subscription kidEvents toyEvents)
+    let app kid kidEvents toyEvents = UI.app (fun () -> init kid) update view (subscription kidEvents toyEvents)
+
+
+module ToyEdit =
+    type Model = {ID:Toy ID option; Name:string Editor.Model; AgeRange:(Age*Age) Editor.Model; WorkRequired:uint16 Editor.Model; LastEvent:EventID}
+
+    let init toy =
+        {ID=toy; Name=Editor.init Toy.name; AgeRange=Editor.init Toy.ageRange; WorkRequired=Editor.init Toy.workRequired; LastEvent=EventID.Zero}, None
+
+    type Msg =
+        | Update of Toy Events
+        | NameMsg of string Editor.Msg
+        | AgeRangeMsg of (Age*Age) Editor.Msg
+        | EffortMsg of uint16 Editor.Msg
+        | Save
+        | CreateResult of Result<Toy ID,Store.Error>
+        | UpdateResult of Result<unit,Store.Error>
+
+    let update msg model =
+        printfn "Toy.update: %A" msg
+        match msg with
+        | Update l -> {model with
+                        Name = Editor.updateProperty Toy.name l model.Name
+                        AgeRange = Editor.updateProperty Toy.ageRange l model.AgeRange
+                        WorkRequired = Editor.updateProperty Toy.workRequired l model.WorkRequired
+                        LastEvent = List.head l |> fst
+                      }, None
+        | NameMsg n -> {model with Name=Editor.update n model.Name}, None
+        | AgeRangeMsg r -> {model with AgeRange=Editor.update r model.AgeRange}, None
+        | EffortMsg c -> {model with WorkRequired=Editor.update c model.WorkRequired}, None
+        | Save ->
+            let events =
+                List.tryCons (Option.map (Property.set Toy.name) model.Name.Edit) []
+                |> List.tryCons (Option.map (Property.set Toy.ageRange) model.AgeRange.Edit)
+                |> List.tryCons (Option.map (Property.set Toy.workRequired) model.WorkRequired.Edit)
+            model, Some((model.ID,events),model.LastEvent)
+        | CreateResult r ->
+            match r with
+            | Ok toy -> {model with ID=Some toy}, None
+            | Error _ -> model, None
+        | UpdateResult _ -> model, None
+
+    type Sub =
+        | Toy of Toy ID
+
+    let subscription toyEvents model =
+        Option.map (fun tid ->
+            Toy tid, Observable.choose (fun (i,e) -> if i=tid then Some e else None) toyEvents |> Observable.map Update
+            ) model.ID
+        |> Option.toList |> Map.ofList
+
+    let view model =
+        UI.div Vertical [
+            Editor.view UI.inputText model.Name |> UI.map NameMsg
+            Editor.view UI.inputRange model.AgeRange |> UI.map AgeRangeMsg
+            Editor.view UI.inputDigits model.WorkRequired |> UI.map EffortMsg
+            UI.button "Save" Save
+        ]
+
+    let app toy toyEvents =
+        UI.app (fun () -> init toy) update view (subscription toyEvents)
+
+
+module ElfEdit =
+    type Model = {ID:Elf ID option; Name:string Editor.Model; WorkRate:Work Editor.Model; Making:Toy ID option; LastEvent:EventID; ToyNames:Map<Toy ID,string>}
+
+    let init elf =
+        {ID=elf; Name=Editor.init Elf.name; WorkRate=Editor.init Elf.workRate; Making=None; LastEvent=EventID.Zero; ToyNames=Map.empty}, None
+
+    type Msg =
+        | Update of Elf Events
+        | ToyNames of Map<Toy ID,string>
+        | NameMsg of string Editor.Msg
+        | WorkRateMsg of Work Editor.Msg
+        | Save
+        | CreateResult of Result<Elf ID,Store.Error>
+        | UpdateResult of Result<unit,Store.Error>
+
+    let update msg model =
+        printfn "Elf.update: %A" msg
+        match msg with
+        | Update l -> {model with
+                        Name = Editor.updateProperty Elf.name l model.Name
+                        WorkRate = Editor.updateProperty Elf.workRate l model.WorkRate
+                        LastEvent = List.head l |> fst
+                      }, None
+        | ToyNames m -> {model with ToyNames=m}, None
+        | NameMsg n -> {model with Name=Editor.update n model.Name}, None
+        | WorkRateMsg r -> {model with WorkRate=Editor.update r model.WorkRate}, None
+        | Save ->
+            let events =
+                List.tryCons (Option.map (Property.set Elf.name) model.Name.Edit) []
+                |> List.tryCons (Option.map (Property.set Elf.workRate) model.WorkRate.Edit)
+            model, Some((model.ID,events),model.LastEvent)
+        | CreateResult r ->
+            match r with
+            | Ok elf -> {model with ID=Some elf}, None
+            | Error _ -> model, None
+        | UpdateResult _ -> model, None
+
+    type Sub =
+        | Elf of Elf ID
+        | ToyName
+
+    let subscription elfEvents toyEvents model =
+        (ToyName, Query.toyNames toyEvents |> Observable.map ToyNames)
+        :: (Option.map (fun tid ->
+                Elf tid, Observable.choose (fun (i,e) -> if i=tid then Some e else None) elfEvents |> Observable.map Update
+                ) model.ID
+           |> Option.toList)
+        |> Map.ofList
+
+    let view model =
+        let making = Option.bind (fun tid -> Map.tryFind tid model.ToyNames) model.Making |> Option.getElse "Nothing"
+        UI.div Vertical [
+            Editor.view UI.inputText model.Name |> UI.map NameMsg
+            Editor.view UI.inputDigits model.WorkRate |> UI.map WorkRateMsg
+            UI.button "Save" Save
+            UI.text (Elf.making.Name+": "+making)
+        ]
+
+    let app elf elfEvents toyEvents  = UI.app (fun () -> init elf) update view (subscription elfEvents toyEvents)
+
+
+module KidList =
+    type Row = {ID:Kid ID; Name:string; Requested:int; Finished:int}
+    type Model = Row list
+
+    let init() = [], None
+
+    type Msg =
+        | KidName of Kid ID * string
+        | KidRequested of (Kid ID * int) list
+        | KidFinished of (Kid ID * int) list
+        | OpenEdit of Kid ID option
+
+    let update msg model : Model * Cmd option =
+        match msg with
+        | KidName (kid,name) ->
+            match List.tryFindIndex (fun r -> r.ID=kid) model with
+            | None -> {ID=kid; Name=name; Requested=0; Finished=0}::model |> List.sortBy (fun r -> r.Name), None
+            | Some i -> List.replacei i {List.item i model with Name=name} model |> List.sortBy (fun r -> r.Name), None
+        | KidRequested l ->
+            List.fold (fun model (kid,requested) ->
+                    match List.tryFindIndex (fun r -> r.ID=kid) model with
+                    | None -> {ID=kid; Name=String.empty; Requested=requested; Finished=0}::model
+                    | Some i -> List.replacei i {List.item i model with Requested=requested} model
+                ) model l, None
+        | KidFinished l ->
+            List.fold (fun model (kid,finished) ->
+                    match List.tryFindIndex (fun r -> r.ID=kid) model with
+                    | None -> {ID=kid; Name=String.empty; Requested=0; Finished=finished}::model
+                    | Some i -> List.replacei i {List.item i model with Finished=finished} model
+                ) model l, None
+        | OpenEdit kid -> model, OpenKidEdit kid |> Some
+
+    type Sub =
+        | KidName
+        | KidRequested
+        | KidFinished
+    
+    let subscription kidEvents toyProgress =
+        let subs =
+            Map.ofList [
+                KidName, Query.kidName kidEvents |> Observable.map Msg.KidName
+                KidRequested, Query.kidRequested toyProgress |> Observable.map Msg.KidRequested 
+                KidFinished, Query.kidFinished toyProgress |> Observable.map Msg.KidFinished
+            ]
+        fun (_:Model) -> subs
+
+    let view model =
+        let header = UI.div Horizontal [UI.text "Kid"; UI.text "Requested"; UI.text "Finished"; UI.button "new" (OpenEdit None)]
+        let rowUI row =
+            UI.div Horizontal [UI.text row.Name; UI.text (string row.Requested); UI.text (string row.Finished); UI.button "edit" (OpenEdit (Some row.ID))]
+        header::List.map rowUI model |> UI.div Vertical
+
+    let app kidEvents toyProgress = UI.app init update view (subscription kidEvents toyProgress)
+
+
+module ToyList =
+    type Row = {ID:Toy ID; Name:string; Requested:int; Finished:int}
+    type Model = Row list
+
+    let init() = [], None
+
+    type Msg =
+        | ToyName of Toy ID * string
+        | ToyRequested of (Toy ID * int) list
+        | ToyFinished of (Toy ID * int) list
+        | OpenEdit of Toy ID option
+
+    let update msg model : Model * Cmd option =
+        match msg with
+        | ToyName (toy,name) ->
+            match List.tryFindIndex (fun r -> r.ID=toy) model with
+            | None -> {ID=toy; Name=name; Requested=0; Finished=0}::model |> List.sortBy (fun r -> r.Name), None
+            | Some i -> List.replacei i {List.item i model with Name=name} model |> List.sortBy (fun r -> r.Name), None
+        | ToyRequested l ->
+            List.fold (fun model (toy,requested) ->
+                    match List.tryFindIndex (fun r -> r.ID=toy) model with
+                    | None -> {ID=toy; Name=String.empty; Requested=requested; Finished=0}::model
+                    | Some i -> List.replacei i {List.item i model with Requested=requested} model
+                ) model l, None
+        | ToyFinished l ->
+            List.fold (fun model (toy,finished) ->
+                    match List.tryFindIndex (fun r -> r.ID=toy) model with
+                    | None -> {ID=toy; Name=String.empty; Requested=0; Finished=finished}::model
+                    | Some i -> List.replacei i {List.item i model with Finished=finished} model
+                ) model l, None
+        | OpenEdit toy -> model, OpenToyEdit toy |> Some
+
+    type Sub =
+        | ToyName
+        | ToyFinished
+        | ToyRequested
+
+    let subscription toyEvents toyProgress =
+        let subs =
+            Map.ofList [
+                ToyName, Query.toyName toyEvents |> Observable.map Msg.ToyName
+                ToyFinished, Query.toyFinished toyProgress |> Observable.map Msg.ToyFinished
+                ToyRequested, Query.toyRequested toyProgress |> Observable.map Msg.ToyRequested
+            ]
+        fun (_:Model) -> subs
+
+
+    let view model =
+        let header = UI.div Horizontal [UI.text "Toy"; UI.text "Requested"; UI.text "Finished"; UI.button "new" (OpenEdit None)]
+        let rowUI row =
+            UI.div Horizontal [UI.text row.Name; UI.text (string row.Requested); UI.text (string row.Finished); UI.button "edit" (OpenEdit (Some row.ID))]
+        header::List.map rowUI model |> UI.div Vertical
+
+    let app toyEvents toyProgress = UI.app init update view (subscription toyEvents toyProgress)
 
 
 module ElfList =
@@ -229,117 +362,6 @@ module ElfList =
     let app elfEvents toyEvents = UI.app init update view (subscription elfEvents toyEvents)
 
 
-module KidList =
-    type Row = {ID:Kid ID; Name:string; Requested:int; Finished:int}
-    type Model = Row list
-
-    let init() = [], None
-
-    type Msg =
-        | KidName of Kid ID * string
-        | KidRequested of (Kid ID * int) list
-        | KidFinished of (Kid ID * int) list
-        | OpenEdit of Kid ID option
-
-    let update msg model : Model * Cmd option =
-        match msg with
-        | KidName (kid,name) ->
-            match List.tryFindIndex (fun r -> r.ID=kid) model with
-            | None -> {ID=kid; Name=name; Requested=0; Finished=0}::model |> List.sortBy (fun r -> r.Name), None
-            | Some i -> List.replacei i {List.item i model with Name=name} model |> List.sortBy (fun r -> r.Name), None
-        | KidRequested l ->
-            List.fold (fun model (kid,requested) ->
-                    match List.tryFindIndex (fun r -> r.ID=kid) model with
-                    | None -> {ID=kid; Name=String.empty; Requested=requested; Finished=0}::model
-                    | Some i -> List.replacei i {List.item i model with Requested=requested} model
-                ) model l, None
-        | KidFinished l ->
-            List.fold (fun model (kid,finished) ->
-                    match List.tryFindIndex (fun r -> r.ID=kid) model with
-                    | None -> {ID=kid; Name=String.empty; Requested=0; Finished=finished}::model
-                    | Some i -> List.replacei i {List.item i model with Finished=finished} model
-                ) model l, None
-        | OpenEdit kid -> model, OpenKidEdit kid |> Some
-
-    type Sub =
-        | KidName
-        | KidRequested
-        | KidFinished
-    
-    let subscription kidEvents toyEvents elfEvents =
-        let subs =
-            Map.ofList [
-                KidName, Query.kidName kidEvents |> Observable.map Msg.KidName
-                KidRequested, Query.kidRequested kidEvents toyEvents |> Observable.map Msg.KidRequested 
-                KidFinished, Query.kidFinished kidEvents toyEvents elfEvents |> Observable.map Msg.KidFinished
-            ]
-        fun (_:Model) -> subs
-
-    let view model =
-        let header = UI.div Horizontal [UI.text "Kid"; UI.text "Requested"; UI.text "Finished"; UI.button "new" (OpenEdit None)]
-        let rowUI row =
-            UI.div Horizontal [UI.text row.Name; UI.text (string row.Requested); UI.text (string row.Finished); UI.button "edit" (OpenEdit (Some row.ID))]
-        header::List.map rowUI model |> UI.div Vertical
-
-    let app kidEvents toyEvents elfEvents = UI.app init update view (subscription kidEvents toyEvents elfEvents)
-
-
-module ToyList =
-    type Row = {ID:Toy ID; Name:string; Requested:int; Finished:int}
-    type Model = Row list
-
-    let init() = [], None
-
-    type Msg =
-        | ToyName of Toy ID * string
-        | ToyRequested of (Toy ID * int) list
-        | ToyFinished of (Toy ID * int) list
-        | OpenEdit of Toy ID option
-
-    let update msg model : Model * Cmd option =
-        match msg with
-        | ToyName (toy,name) ->
-            match List.tryFindIndex (fun r -> r.ID=toy) model with
-            | None -> {ID=toy; Name=name; Requested=0; Finished=0}::model |> List.sortBy (fun r -> r.Name), None
-            | Some i -> List.replacei i {List.item i model with Name=name} model |> List.sortBy (fun r -> r.Name), None
-        | ToyRequested l ->
-            List.fold (fun model (toy,requested) ->
-                    match List.tryFindIndex (fun r -> r.ID=toy) model with
-                    | None -> {ID=toy; Name=String.empty; Requested=requested; Finished=0}::model
-                    | Some i -> List.replacei i {List.item i model with Requested=requested} model
-                ) model l, None
-        | ToyFinished l ->
-            List.fold (fun model (toy,finished) ->
-                    match List.tryFindIndex (fun r -> r.ID=toy) model with
-                    | None -> {ID=toy; Name=String.empty; Requested=0; Finished=finished}::model
-                    | Some i -> List.replacei i {List.item i model with Finished=finished} model
-                ) model l, None
-        | OpenEdit toy -> model, OpenToyEdit toy |> Some
-
-    type Sub =
-        | ToyName
-        | ToyFinished
-        | ToyRequested
-
-    let subscription kidEvents toyEvents elfEvents =
-        let subs =
-            Map.ofList [
-                ToyName, Query.toyName toyEvents |> Observable.map Msg.ToyName
-                ToyFinished, Query.toyFinished elfEvents |> Observable.map Msg.ToyFinished
-                ToyRequested, Query.toyRequested kidEvents toyEvents |> Observable.map Msg.ToyRequested
-            ]
-        fun (_:Model) -> subs
-
-
-    let view model =
-        let header = UI.div Horizontal [UI.text "Toy"; UI.text "Requested"; UI.text "Finished"; UI.button "new" (OpenEdit None)]
-        let rowUI row =
-            UI.div Horizontal [UI.text row.Name; UI.text (string row.Requested); UI.text (string row.Finished); UI.button "edit" (OpenEdit (Some row.ID))]
-        header::List.map rowUI model |> UI.div Vertical
-
-    let app kidEvents toyEvents elfEvents = UI.app init update view (subscription kidEvents toyEvents elfEvents)
-
-
 module Main =
     type Model = {Kid:KidList.Model; Toy:ToyList.Model; Elf:ElfList.Model}
 
@@ -347,7 +369,7 @@ module Main =
         let kidModel,kidCmd = KidList.init()
         let toyModel,toyCmd = ToyList.init()
         let elfModel,elfCmd = ElfList.init()
-        {Kid=kidModel; Toy=toyModel; Elf=elfModel}, List.choose id [kidCmd;toyCmd;elfCmd]
+        {Kid=kidModel; Toy=toyModel; Elf=elfModel}, List.choose id [kidCmd;toyCmd;elfCmd] |> Option.ofList
 
     type Msg =
         | KidMsg of KidList.Msg
@@ -356,18 +378,18 @@ module Main =
 
     let update msg model =
         match msg with
-        | KidMsg m -> let kid,cmd = KidList.update m model.Kid in {model with Kid = kid}, Option.toList cmd
-        | ToyMsg m -> let toy,cmd = ToyList.update m model.Toy in {model with Toy = toy}, Option.toList cmd
-        | ElfMsg m -> let elf,cmd = ElfList.update m model.Elf in {model with Elf = elf}, Option.toList cmd
+        | KidMsg m -> let kid,cmd = KidList.update m model.Kid in {model with Kid = kid}, Option.map List.singleton cmd
+        | ToyMsg m -> let toy,cmd = ToyList.update m model.Toy in {model with Toy = toy}, Option.map List.singleton cmd
+        | ElfMsg m -> let elf,cmd = ElfList.update m model.Elf in {model with Elf = elf}, Option.map List.singleton cmd
 
     type Sub =
         | KidList of KidList.Sub
         | ToyList of ToyList.Sub
         | ElfList of ElfList.Sub
     
-    let subscription kidEvents toyEvents elfEvents model =
-        KidList.subscription kidEvents toyEvents elfEvents model.Kid |> Map.toSeq |> Seq.map (fun (k,v) -> KidList k,Observable.map KidMsg v)
-        |> Seq.append (ToyList.subscription kidEvents toyEvents elfEvents model.Toy |> Map.toSeq |> Seq.map (fun (k,v) -> ToyList k,Observable.map ToyMsg v))
+    let subscription kidEvents toyEvents elfEvents toyProgress model =
+        KidList.subscription kidEvents toyProgress model.Kid |> Map.toSeq |> Seq.map (fun (k,v) -> KidList k,Observable.map KidMsg v)
+        |> Seq.append (ToyList.subscription toyEvents toyProgress model.Toy |> Map.toSeq |> Seq.map (fun (k,v) -> ToyList k,Observable.map ToyMsg v))
         |> Seq.append (ElfList.subscription elfEvents toyEvents model.Elf |> Map.toSeq |> Seq.map (fun (k,v) -> ElfList k,Observable.map ElfMsg v))
         |> Map.ofSeq
 
@@ -378,4 +400,4 @@ module Main =
             ElfList.view model.Elf |> UI.map ElfMsg
         ]
 
-    let app kidEvents toyEvents elfEvents = UI.app init update view (subscription kidEvents toyEvents elfEvents)
+    let app kidEvents toyEvents elfEvents toyProgress = UI.app init update view (subscription kidEvents toyEvents elfEvents toyProgress)

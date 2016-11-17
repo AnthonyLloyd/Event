@@ -37,8 +37,8 @@ type 'msg UI = {UI:UI;mutable Event:'msg->unit}
 [<NoEquality;NoComparison>]
 type App<'msg,'model,'sub,'cmd when 'sub : comparison> =
     {
-        Init: unit -> 'model * 'cmd
-        Update: 'msg -> 'model -> 'model * 'cmd
+        Init: unit -> 'model * 'cmd option
+        Update: 'msg -> 'model -> 'model * 'cmd option
         View: 'model -> 'msg UI
         Subscription: 'model -> Map<'sub,IObservable<'msg>>
     }
@@ -156,7 +156,7 @@ module UI =
         diff ui1.UI ui2.UI [] 0 []
 
     /// Returns a UI application from a UI init, update and view.
-    let appSimple init update view = {Init=(fun () ->init(),());Update=(fun msg model -> update msg model,());View=view;Subscription=(fun _ -> Map.empty)}
+    let appSimple init update view = {Init=(fun () ->init(),None);Update=(fun msg model -> update msg model,None);View=view;Subscription=(fun _ -> Map.empty)}
 
     let app init update view subscription = {Init=init;Update=update;View=view;Subscription=subscription}
 
@@ -172,7 +172,7 @@ module UI =
                     let newSubs = app.Subscription model
                     subs |> Map.iter (fun k d -> if Map.containsKey k newSubs |> not then (d:IDisposable).Dispose())
                     let subs = Map.map (fun k sub -> match Map.tryFind k subs with |Some d -> d |None-> Observable.subscribe mb.Post sub) newSubs
-                    commandHandler cmd |> Option.iter mb.Post
+                    Option.iter (commandHandler >> Option.iter mb.Post) cmd
                     let newUI = app.View model
                     newUI.Event<-mb.Post
                     let diff = diff ui newUI
@@ -182,7 +182,7 @@ module UI =
                 }
             let model,cmd = app.Init() //TODO Should this be async, can it be done in the async loop
             let subs = app.Subscription model |> Map.map (fun _ -> Observable.subscribe mb.Post)
-            commandHandler cmd |> Option.iter mb.Post
+            Option.iter (commandHandler >> Option.iter mb.Post) cmd
             let ui = app.View model
             ui.Event<-mb.Post
             nativeUI.Send [InsertUI([],ui.UI)]

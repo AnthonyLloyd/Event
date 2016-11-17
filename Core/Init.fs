@@ -11,6 +11,7 @@ type Result<'o,'e> =
 module Result =
     let map f r = match r with |Ok x -> Ok (f x) |Error e -> Error e
     let bind binder r = match r with |Ok i -> binder i |Error e -> Error e
+    let isOk r = match r with |Ok _ -> true |Error _ -> false
     let apply f x =
         match f,x with
         | Ok f, Ok v -> Ok (f v)
@@ -66,7 +67,9 @@ module Threading =
             else let b = f a in d.Add(a,b); b
     let inline flip f b a = f a b
     let between a b x = (a<=x&&x<=b)||(a>=x&&x>=b)
-
+    let mapFst f (a,b) = f a,b
+    let mapSnd f (a,b) = a,f b
+    
 module String =
     let empty = String.Empty
     let nonEmpty s = if String.IsNullOrWhiteSpace s then None else s.Trim() |> Some
@@ -94,6 +97,71 @@ module List =
         s1 @ a::List.tail s2
 
 module Map =
+    let revisions before after =
+        let after = Map.fold (fun after k _ -> if Map.containsKey k after then after else Map.add k 0 after) after before
+        Map.filter (fun k v -> Map.tryFind k before |> Option.getElse (LanguagePrimitives.GenericZero) <> v) after
     let incr m k = Map.add k (Map.tryFind k m |> Option.getElse 0 |> (+)1) m
     let decr m k = Map.add k (Map.tryFind k m |> Option.getElse 0 |> (+) -1) m
     let addOrRemove k o m = match o with | Some v -> Map.add k v m | None -> Map.remove k m
+
+module Observable =
+
+    [<NoComparison>]
+    type private 'a CacheLastMsg =
+        | Add of IObserver<'a>
+        | Remove of IObserver<'a>
+        | OnNext of 'a
+        | OnError of exn
+        | OnCompleted
+        | Raise
+ 
+    let cacheLast (o:IObservable<_>) =
+        let mbox =
+            MailboxProcessor.Start(fun inbox ->
+                let rec loop observers disposable a raiseCount = async {
+                    let! msg = inbox.Receive()
+                    let observers,disposable,a,raiseCount =
+                        match msg with
+                        | Add ob ->
+                            
+                            let disposable =
+                                match disposable with
+                                |None ->
+                                    { new IObserver<_> with
+                                        member __.OnCompleted() = inbox.Post OnCompleted
+                                        member __.OnError(e) = OnError e |> inbox.Post
+                                        member __.OnNext(v) = OnNext v |> inbox.Post
+                                    } |> o.Subscribe |> Some
+                                |some -> some
+                            Option.iter ob.OnNext a
+                            ob::observers, disposable, a, raiseCount
+                        | Remove ob ->
+                            let observers = List.filter ((<>)ob) observers
+                            let disposable = if List.isEmpty observers then disposable |> Option.iter (fun d -> d.Dispose()); None else disposable
+                            observers, disposable, a, raiseCount
+                        | OnNext a ->
+                            inbox.Post Raise
+                            observers, disposable, Some a, raiseCount+1
+                        | OnError e ->
+                            observers |> List.iter (fun ob -> ob.OnError e)
+                            observers, disposable, a, raiseCount
+                        | OnCompleted ->
+                            observers |> List.iter (fun ob -> ob.OnCompleted())
+                            observers, disposable, a, raiseCount
+                        | Raise ->
+                            let a =
+                                if raiseCount=1 then
+                                    let a = Option.get a
+                                    observers |> List.iter (fun ob -> ob.OnNext a)
+                                    None
+                                else a
+                            observers, disposable, a, raiseCount-1
+                    return! loop observers disposable a raiseCount
+                }
+                loop List.empty None None 0
+                )
+        { new IObservable<_> with
+            member __.Subscribe(ob) =
+                Add ob |> mbox.Post
+                {new IDisposable with member __.Dispose() = Remove ob |> mbox.Post }
+        }
