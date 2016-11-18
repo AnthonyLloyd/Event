@@ -84,27 +84,15 @@ module Query =
         toDelta kidEvents
         |> Observable.choose (fun (kid,events) -> Property.get Kid.behaviour events |> Option.map (fun l -> kid,l))
 
-    let kidWishList (kidEvents:IObservable<Kid ID * Kid Events>) =
-        toDelta kidEvents
-        |> Observable.choose (fun (elf,events) ->
-                match List.collect (snd >> List.choose Kid.wishList.Getter) events with
-                |[] -> None
-                |l -> Some (elf,l)
-            )
-        |> Observable.scan (fun (map,_) (kid,setEvents) ->
-                let newSet = Map.tryFind kid map |> Option.getElse Set.empty |> SetEvent.update setEvents
-                Map.add kid newSet map, (kid,newSet)
-            ) (Map.empty,Unchecked.defaultof<_>)
-        |> Observable.map snd
-
     let kidWishListEvent (kidEvents:IObservable<Kid ID * Kid Events>) =
         toDelta kidEvents
         |> Observable.choose (fun (elf,events) ->
-                match List.collect (fun (eid,l) -> List.choose Kid.wishList.Getter l 
-                                                   |> List.map (function |SetAdd toy -> MapAdd (toy,eid) |SetRemove toy -> MapRemove toy)
-                                                   ) events with
-                |[] -> None
-                |l -> Some (elf,l)
+            match List.collect (fun (eid,l) ->
+                List.choose Kid.wishList.Getter l 
+                |> List.map (function |SetAdd toy -> MapAdd (toy,eid) |SetRemove toy -> MapRemove toy)
+                ) events with
+            |[] -> None
+            |l -> Some (elf,l)
             )
         |> Observable.scan (fun (map,_) (kid,mapEvents) ->
                 let newSet = Map.tryFind kid map |> Option.getElse Map.empty |> MapEvent.update mapEvents

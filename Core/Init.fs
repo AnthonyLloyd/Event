@@ -7,7 +7,7 @@ type Result<'o,'e> =
     | Ok of 'o
     | Error of 'e
 
-[<AutoOpen>][<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module Result =
     let map f r = match r with |Ok x -> Ok (f x) |Error e -> Error e
     let bind binder r = match r with |Ok i -> binder i |Error e -> Error e
@@ -18,7 +18,6 @@ module Result =
         | Error f, Ok _ -> Error f
         | Ok _, Error f -> Error [f]
         | Error f1, Error f2 -> Error (f2::f1)
-    let (<*>) = apply
     let ofOption f o = match o with |None -> f() |> Error |Some v -> Ok v
     let toOption r = match r with |Ok o -> Some o |Error _ -> None
     let getElse v r = match r with |Ok o -> o |Error _ -> v
@@ -26,10 +25,15 @@ module Result =
         member __.Bind(v,f) = bind f v
         member __.Return v = Ok v
         member __.ReturnFrom o = o
-    let attempt = AttemptBuilder()
 
 [<AutoOpen>]
-module Threading =
+module ResultAuto =
+    let (<*>) = Result.apply
+    let attempt = Result.AttemptBuilder()
+
+
+[<AutoOpen>]
+module Common =
     let rec atomicUpdate update state =
         let oldState = !state
         let newState = update oldState
@@ -84,7 +88,7 @@ module Option =
     let ofList l = match l with |[] -> None |l -> Some l
 
 module Seq =
-    let groupByFst s = Seq.groupBy fst s |> Seq.map (fun (k,l) -> k,Seq.map snd l)
+    let groupByFst s = Seq.groupBy fst s |> Seq.map (fun (k,l) -> k, Seq.map snd l)
 
 module List =
     let tryCons o xs = match o with |None -> xs | Some x -> x::xs

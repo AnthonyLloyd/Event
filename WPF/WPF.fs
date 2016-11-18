@@ -82,5 +82,3 @@ let CreateNaiveUI (root:ContentControl) =
         member __.Send list =
             root.Dispatcher.Invoke (fun () -> List.iter uiUpdate list)
     }
-
-

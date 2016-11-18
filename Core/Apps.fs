@@ -38,6 +38,7 @@ module Editor =
 
     let app inputUI property = UI.appSimple (fun () -> init property) update (view inputUI) // TODO: tooltip, coloured border, rightclick reset
 
+
 module EditorSet =
     type 'a Model = {Label:string; Previous:(EventID * 'a list) option; Latest:(EventID * 'a list) option; Edit:'a option list option}
 

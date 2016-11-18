@@ -49,6 +49,10 @@ let main _ =
 
     let app = Apps.Main.app kidObservable toyObservable elfObservable toyProgressObservable
 
+    let _kidsProc = Procs.kidsRun kidObservable toyObservable elfObservable toyProgressObservable
+    
+    let _santaProc = Procs.santaRun kidObservable toyObservable elfObservable toyProgressObservable
+
     let mainWindow = Window()
 
     let user = User.login "you"
@@ -73,6 +77,7 @@ let main _ =
         None
 
     WPF.CreateNaiveUI mainWindow |> UI.run app commandHandler
+
     Application().Run(mainWindow) |> ignore
     
     0
