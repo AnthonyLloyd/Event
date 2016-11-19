@@ -37,10 +37,11 @@ type 'msg UI = {UI:UI;mutable Event:'msg->unit}
 [<NoEquality;NoComparison>]
 type App<'msg,'model,'sub,'cmd when 'sub : comparison> =
     {
-        Init: unit -> 'model * 'cmd option
-        Update: 'msg -> 'model -> 'model * 'cmd option
+        Init: unit -> 'model * 'cmd list
+        Update: 'msg -> 'model -> 'model * 'cmd list
         View: 'model -> 'msg UI
         Subscription: 'model -> Map<'sub,IObservable<'msg>>
+        Handler: 'cmd -> 'msg option
     }
 
 /// Native UI interface.
@@ -54,8 +55,8 @@ module UI =
         let d = System.Runtime.CompilerServices.ConditionalWeakTable<'model,'msg UI>()
         fun view model ->
             match d.TryGetValue model with
-            |true,ui -> ui
-            |false,_ ->
+            | true,ui -> ui
+            | false,_ ->
                 let ui = view model
                 d.Add(model,ui)
                 ui
@@ -139,31 +140,31 @@ module UI =
         let rec diff ui1 ui2 path index diffs =
             match ui1,ui2 with
             | _,_ when LanguagePrimitives.PhysicalEquality ui1 ui2 -> diffs
-            |Text t1,Text t2 -> if t1=t2 then diffs else UpdateUI(path,ui2)::diffs
-            |Button (t1,e1),Button (t2,e2) -> if t1=t2 then EventUI(update e1 e2)::diffs else EventUI(update e1 e2)::UpdateUI(path,ui2)::diffs
-            |Input (c1,t1,e1),Input (c2,t2,e2) -> if c1=c2 && t1=t2 then EventUI(update e1 e2)::diffs else EventUI(update e1 e2)::UpdateUI(path,ui2)::diffs
-            |Select (o1,s1,e1),Select (o2,s2,e2) -> if o1=o2 && s1=s2 then EventUI(update e1 e2)::diffs else EventUI(update e1 e2)::UpdateUI(path,ui2)::diffs
+            | Text t1,Text t2 -> if t1=t2 then diffs else UpdateUI(path,ui2)::diffs
+            | Button (t1,e1),Button (t2,e2) -> if t1=t2 then EventUI(update e1 e2)::diffs else EventUI(update e1 e2)::UpdateUI(path,ui2)::diffs
+            | Input (c1,t1,e1),Input (c2,t2,e2) -> if c1=c2 && t1=t2 then EventUI(update e1 e2)::diffs else EventUI(update e1 e2)::UpdateUI(path,ui2)::diffs
+            | Select (o1,s1,e1),Select (o2,s2,e2) -> if o1=o2 && s1=s2 then EventUI(update e1 e2)::diffs else EventUI(update e1 e2)::UpdateUI(path,ui2)::diffs
             //|Button _,Button _ |Input _,Input _ -> UpdateUI(path,ui2)::diffs
-            |Div (l1,_),Div (l2,_) when l1<>l2 -> ReplaceUI(index::path,ui2)::diffs
-            |Div (_,[]),Div (_,[]) -> diffs
-            |Div (_,[]),Div (_,l) -> List.fold (fun (i,diffs) ui -> i+1,InsertUI(i::path,ui)::diffs) (index,diffs) l |> snd
-            |Div (_,l),Div (_,[]) -> List.fold (fun (i,diffs) _ -> i+1,RemoveUI(i::path)::diffs) (index,diffs) l |> snd
-            |Div (l,(h1::t1)),Div (_,(h2::t2)) when LanguagePrimitives.PhysicalEquality h1 h2 -> diff (Div(l,t1)) (Div(l,t2)) path (index+1) diffs
-            |Div (l,(h1::t1)),Div (_,(h2::h3::t2)) when LanguagePrimitives.PhysicalEquality h1 h3 -> diff (Div(l,t1)) (Div(l,t2)) path (index+1) (InsertUI(index::path,h2)::diffs)
-            |Div (l,(_::h2::t1)),Div (_,(h3::t2)) when LanguagePrimitives.PhysicalEquality h2 h3 -> diff (Div(l,t1)) (Div(l,t2)) path (index+1) (RemoveUI(index::path)::diffs)
-            |Div (l,(h1::t1)),Div (_,(h2::t2)) -> diff h1 h2 (index::path) 0 diffs |> diff (Div(l,t1)) (Div(l,t2)) path (index+1)
-            |_,_ -> ReplaceUI(index::path,ui2)::diffs
+            | Div (l1,_),Div (l2,_) when l1<>l2 -> ReplaceUI(index::path,ui2)::diffs
+            | Div (_,[]),Div (_,[]) -> diffs
+            | Div (_,[]),Div (_,l) -> List.fold (fun (i,diffs) ui -> i+1,InsertUI(i::path,ui)::diffs) (index,diffs) l |> snd
+            | Div (_,l),Div (_,[]) -> List.fold (fun (i,diffs) _ -> i+1,RemoveUI(i::path)::diffs) (index,diffs) l |> snd
+            | Div (l,(h1::t1)),Div (_,(h2::t2)) when LanguagePrimitives.PhysicalEquality h1 h2 -> diff (Div(l,t1)) (Div(l,t2)) path (index+1) diffs
+            | Div (l,(h1::t1)),Div (_,(h2::h3::t2)) when LanguagePrimitives.PhysicalEquality h1 h3 -> diff (Div(l,t1)) (Div(l,t2)) path (index+1) (InsertUI(index::path,h2)::diffs)
+            | Div (l,(_::h2::t1)),Div (_,(h3::t2)) when LanguagePrimitives.PhysicalEquality h2 h3 -> diff (Div(l,t1)) (Div(l,t2)) path (index+1) (RemoveUI(index::path)::diffs)
+            | Div (l,(h1::t1)),Div (_,(h2::t2)) -> diff h1 h2 (index::path) 0 diffs |> diff (Div(l,t1)) (Div(l,t2)) path (index+1)
+            | _,_ -> ReplaceUI(index::path,ui2)::diffs
         diff ui1.UI ui2.UI [] 0 []
 
     /// Returns a UI application from a UI init, update and view.
-    let appSimple init update view = {Init=(fun () ->init(),None);Update=(fun msg model -> update msg model,None);View=view;Subscription=(fun _ -> Map.empty)}
+    let appSimple init update view = {Init=(fun () ->init(),[]);Update=(fun msg model -> update msg model,[]);View=view;Subscription=(fun _ -> Map.empty);Handler=fun _ -> None}
 
-    let app init update view subscription = {Init=init;Update=update;View=view;Subscription=subscription}
+    let app init update view subscription handler = {Init=init;Update=update;View=view;Subscription=subscription;Handler=handler}
 
-    let private remapEvents l = List.iter (function |EventUI f -> f() |_-> ()) l
+    let private remapEvents l = List.iter (function | EventUI f -> f() | _-> ()) l
 
     /// Runs a UI application given a native UI.
-    let run (app:App<'msg,'model,'sub,'cmd>) commandHandler (nativeUI:INativeUI) =
+    let run (app:App<'msg,'model,'sub,'cmd>) (nativeUI:INativeUI) =
         MailboxProcessor.Start(fun mb ->
             let rec loop model ui subs =
                 async {
@@ -172,7 +173,7 @@ module UI =
                     let newSubs = app.Subscription model
                     subs |> Map.iter (fun k d -> if Map.containsKey k newSubs |> not then (d:IDisposable).Dispose())
                     let subs = Map.map (fun k sub -> match Map.tryFind k subs with |Some d -> d |None-> Observable.subscribe mb.Post sub) newSubs
-                    Option.iter (commandHandler >> Option.iter mb.Post) cmd
+                    List.iter (app.Handler >> Option.iter mb.Post) cmd
                     let newUI = app.View model
                     newUI.Event<-mb.Post
                     let diff = diff ui newUI
@@ -182,7 +183,7 @@ module UI =
                 }
             let model,cmd = app.Init() //TODO Should this be async, can it be done in the async loop
             let subs = app.Subscription model |> Map.map (fun _ -> Observable.subscribe mb.Post)
-            Option.iter (commandHandler >> Option.iter mb.Post) cmd
+            List.iter (app.Handler >> Option.iter mb.Post) cmd
             let ui = app.View model
             ui.Event<-mb.Post
             nativeUI.Send [InsertUI([],ui.UI)]

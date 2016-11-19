@@ -47,36 +47,36 @@ let main _ =
         Query.toyProgress kidObservable toyObservable elfObservable
         |> Observable.cacheLast
 
-    let app = Apps.Main.app kidObservable toyObservable elfObservable toyProgressObservable
+    let mainWindow = Window()
+
+    let user = User.login "you"
+
+    let openApp app =
+        mainWindow.Dispatcher.Invoke (fun () ->
+            let window = Window()
+            WPF.CreateNaiveUI window |> UI.run app
+            window.Show()
+        )
+
+    let saveHandler store createMsg updateMsg ((oid,events),lastEvent) =
+        match oid with
+        | None -> Store.create user events store |> createMsg |> Some
+        | Some aid -> Store.update user aid events lastEvent store |> updateMsg |> Some
+
+    let commandHandler cmd =
+        match cmd with
+        | Apps.Cmd.OpenKidEdit kid -> Apps.KidEdit.app kid kidObservable toyObservable (saveHandler kidStore Apps.KidEdit.CreateResult Apps.KidEdit.UpdateResult) |> openApp
+        | Apps.Cmd.OpenToyEdit toy -> Apps.ToyEdit.app toy toyObservable (saveHandler toyStore Apps.ToyEdit.CreateResult Apps.ToyEdit.UpdateResult) |> openApp
+        | Apps.Cmd.OpenElfEdit elf -> Apps.ElfEdit.app elf elfObservable toyObservable (saveHandler elfStore Apps.ElfEdit.CreateResult Apps.ElfEdit.UpdateResult) |> openApp
+        None
+
+    let app = Apps.Main.app kidObservable toyObservable elfObservable toyProgressObservable commandHandler
 
     let _kidsProc = Procs.kidsRun kidObservable toyObservable elfObservable toyProgressObservable
     
     let _santaProc = Procs.santaRun kidObservable toyObservable elfObservable toyProgressObservable
 
-    let mainWindow = Window()
-
-    let user = User.login "you"
-
-    let openApp store createMsg updateMsg app =
-        let commandHandler ((oid,events),lastEvent) =
-            match oid with
-            | None -> Store.create user events store |> createMsg |> Some
-            | Some aid -> Store.update user aid events lastEvent store |> updateMsg |> Some
-        mainWindow.Dispatcher.Invoke (fun () ->
-            let window = Window()
-            WPF.CreateNaiveUI window |> UI.run app commandHandler
-            window.Show()
-        )
-
-    let commandHandler cmd =
-        List.iter (function
-            | Apps.Cmd.OpenKidEdit kid -> Apps.KidEdit.app kid kidObservable toyObservable |> openApp kidStore Apps.KidEdit.CreateResult Apps.KidEdit.UpdateResult
-            | Apps.Cmd.OpenToyEdit toy -> Apps.ToyEdit.app toy toyObservable |> openApp toyStore Apps.ToyEdit.CreateResult Apps.ToyEdit.UpdateResult
-            | Apps.Cmd.OpenElfEdit elf -> Apps.ElfEdit.app elf elfObservable toyObservable |> openApp elfStore Apps.ElfEdit.CreateResult Apps.ElfEdit.UpdateResult
-        ) cmd
-        None
-
-    WPF.CreateNaiveUI mainWindow |> UI.run app commandHandler
+    WPF.CreateNaiveUI mainWindow |> UI.run app
 
     Application().Run(mainWindow) |> ignore
     

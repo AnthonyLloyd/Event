@@ -15,7 +15,7 @@ module User =
             User userID
     let name (User userID) = Map.find userID !map
 
-type EventID = |EventID of time:DateTime * user:UserID
+type EventID = | EventID of time:DateTime * user:UserID
                static member Zero = EventID(DateTime.MinValue,User 0)
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
@@ -86,6 +86,11 @@ module Store =
             | Error _ -> ()
             result
 
+    let getAll (store:'Aggregate Store) =
+        match store with
+        | MemoryStore storeRef ->
+            storeRef.Value.Updates
+
 type 'a SetEvent =
     | SetAdd of 'a
     | SetRemove of 'a
@@ -139,4 +144,4 @@ module Property =
     let getAndValidate (property:Property<'a,'b>) (updates:'a Events) =
         get property updates |> property.Validation
     let getEvents (property:Property<'a,'b>) (update:'a Events) : 'b Events =
-        List.choose (fun (e,l) -> match List.choose property.Getter l with |[] -> None |l -> Some (e,l)) update
+        List.choose (fun (e,l) -> match List.choose property.Getter l with | [] -> None | l -> Some (e,l)) update
