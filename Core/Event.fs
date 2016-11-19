@@ -2,7 +2,7 @@
 
 open System
 
-type UserID = User of int
+type UserID = private User of int
 
 module User =
     let private map = Map.ofList [1,"admin"] |> ref
@@ -15,7 +15,7 @@ module User =
             User userID
     let name (User userID) = Map.find userID !map
 
-type EventID = | EventID of time:DateTime * user:UserID
+type EventID = private | EventID of time:DateTime * user:UserID
                static member Zero = EventID(DateTime.MinValue,User 0)
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
@@ -24,7 +24,7 @@ module EventID =
     let time (EventID(t,_)) = t
     let User (EventID(_,u)) = u
 
-type 'Aggregate ID = Created of EventID
+type 'Aggregate ID = private Created of EventID
 
 module ID =
     let internal gen eventID = Created eventID

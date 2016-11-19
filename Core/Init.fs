@@ -87,7 +87,6 @@ module Option =
     let getElse v o = match o with | Some i -> i | None -> v
     let getElseFun f o = match o with | Some i -> i | None -> f()
     let orTry a o = match o with | None -> a | _ -> o
-    let ofList l = match l with | [] -> None | l -> Some l
     let cons x xs = match x with | None -> xs | Some x -> x::xs
 
 module Seq =

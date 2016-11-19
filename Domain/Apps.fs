@@ -65,12 +65,8 @@ module KidEdit =
         | ToyName
 
     let subscription kidEvents toyEvents model =
-        (ToyName, Query.toyNames toyEvents |> Observable.map ToyNames)
-        :: (Option.map (fun tid ->
-                Kid tid, Observable.choose (fun (i,e) -> if i=tid then Some e else None) kidEvents
-                         |> Observable.map Update
-                ) model.ID
-           |> Option.toList)
+        [(ToyName, Query.toyNames toyEvents |> Observable.map ToyNames)]
+        |> Option.cons (Option.map (fun tid -> Kid tid, Observable.choose (fun (i,e) -> if i=tid then Some e else None) kidEvents |> Observable.map Update) model.ID)
         |> Map.ofList
 
     let view model =
@@ -187,11 +183,8 @@ module ElfEdit =
         | ToyName
 
     let subscription elfEvents toyEvents model =
-        (ToyName, Query.toyNames toyEvents |> Observable.map ToyNames)
-        :: (Option.map (fun tid ->
-                Elf tid, Observable.choose (fun (i,e) -> if i=tid then Some e else None) elfEvents |> Observable.map Update
-                ) model.ID
-           |> Option.toList)
+        [(ToyName, Query.toyNames toyEvents |> Observable.map ToyNames)]
+        |> Option.cons (Option.map (fun tid -> Elf tid, Observable.choose (fun (i,e) -> if i=tid then Some e else None) elfEvents |> Observable.map Update) model.ID)
         |> Map.ofList
 
     let view model =
