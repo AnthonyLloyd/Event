@@ -43,17 +43,20 @@ module KidEdit =
         | BehaviourMsg c -> {model with Behaviour=Editor.update c model.Behaviour}, []
         | WishListMsg w -> {model with WishList=EditorSet.update w model.WishList}, []
         | Save ->
-            let events =
-                Option.cons (Option.map (Property.set Kid.name) model.Name.Edit) []
+            let cmd =
+                model.WishList.Edit
+                |> Option.map (fun e ->
+                    let before = model.WishList.Latest |> Option.map (snd>>Set.ofList) |> Option.getElse Set.empty
+                    List.choose id e |> Set.ofList |> SetEvent.difference before |> List.map Kid.WishList
+                )
+                |> Option.getElse []
+                |> Option.cons (Option.map (Property.set Kid.name) model.Name.Edit)
                 |> Option.cons (Option.map (Property.set Kid.age) model.Age.Edit)
                 |> Option.cons (Option.map (Property.set Kid.behaviour) model.Behaviour.Edit)
-            let events =
-                match model.WishList.Edit with
-                | None -> events
-                | Some e ->
-                    let before = model.WishList.Latest |> Option.map (snd>>Set.ofList) |> Option.getElse Set.empty
-                    List.choose id e |> Set.ofList |> SetEvent.difference before |> List.map Kid.WishList |> List.append events
-            model, [(model.ID,events),model.LastEvent]
+                |> List1.tryOfList
+                |> Option.map (addFst model.ID >> addSnd model.LastEvent)
+                |> Option.toList
+            model, cmd
         | CreateResult r ->
             match r with
             | Ok kid -> {model with ID=Some kid}, []
@@ -109,11 +112,14 @@ module ToyEdit =
         | AgeRangeMsg r -> {model with AgeRange=Editor.update r model.AgeRange}, []
         | EffortMsg c -> {model with WorkRequired=Editor.update c model.WorkRequired}, []
         | Save ->
-            let events =
+            let cmd =
                 Option.cons (Option.map (Property.set Toy.name) model.Name.Edit) []
                 |> Option.cons (Option.map (Property.set Toy.ageRange) model.AgeRange.Edit)
                 |> Option.cons (Option.map (Property.set Toy.workRequired) model.WorkRequired.Edit)
-            model, [(model.ID,events),model.LastEvent]
+                |> List1.tryOfList
+                |> Option.map (addFst model.ID >> addSnd model.LastEvent)
+                |> Option.toList
+            model, cmd
         | CreateResult r ->
             match r with
             | Ok toy -> {model with ID=Some toy}, []
@@ -168,10 +174,13 @@ module ElfEdit =
         | NameMsg n -> {model with Name=Editor.update n model.Name}, []
         | WorkRateMsg r -> {model with WorkRate=Editor.update r model.WorkRate}, []
         | Save ->
-            let events =
+            let cmd =
                 Option.cons (Option.map (Property.set Elf.name) model.Name.Edit) []
                 |> Option.cons (Option.map (Property.set Elf.workRate) model.WorkRate.Edit)
-            model, [(model.ID,events),model.LastEvent]
+                |> List1.tryOfList
+                |> Option.map (addFst model.ID >> addSnd model.LastEvent)
+                |> Option.toList
+            model, cmd
         | CreateResult r ->
             match r with
             | Ok elf -> {model with ID=Some elf}, []

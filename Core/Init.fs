@@ -2,6 +2,7 @@
 
 open System
 open System.Threading
+open System.Diagnostics.CodeAnalysis
 
 type Result<'o,'e> =
     | Ok of 'o
@@ -65,6 +66,23 @@ module Map =
     let choose chooser map =
         Map.filter (fun k v -> chooser k v |> Option.isSome) map
         |> Map.map (fun k v -> chooser k v |> Option.get)
+
+
+[<SuppressMessage("NameConventions","TypeNamesMustBePascalCase")>]
+type 'a list1 = private NonEmptyList of 'a list
+
+module List1 =
+    let head (NonEmptyList l) = List.head l
+    let init x xs = NonEmptyList(x::xs)
+    let tryOfList l = match l with | [] -> None | x::xs -> init x xs |> Some
+    let toList (NonEmptyList l) = l
+    let singleton s = NonEmptyList [s]
+    let map mapper (NonEmptyList l) = List.map mapper l |> NonEmptyList
+    let sort (NonEmptyList l) = List.sort l |> NonEmptyList
+    let fold folder state (NonEmptyList list) = List.fold folder state list
+    let tryPick chooser (NonEmptyList list) = List.tryPick chooser list
+    let tryChoose chooser (NonEmptyList list) =
+        match List.choose chooser list with | [] -> None | l -> NonEmptyList l |> Some
 
 module Observable =
 

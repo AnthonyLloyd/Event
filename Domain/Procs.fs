@@ -56,10 +56,12 @@ module Procs =
                     | 6 -> randDo 0.2 addOne @ randDo 0.6 removeOne
                     | _ -> removeOne()
 
-                if List.isEmpty changes |> not then
+                List1.tryOfList changes
+                |> Option.iter (fun l ->
                     let user = User.login "kid"
                     let lastEvent = List.head kidEvents |> fst
-                    Store.update user kid changes lastEvent kidStore |> ignore
+                    Store.update user kid l lastEvent kidStore |> ignore
+                )
             } |> ignore
 
         repeat run kidActionTime
@@ -80,7 +82,7 @@ module Procs =
                     Store.getAll elfStore
                     |> Map.map (fun _ events ->
                         Property.getEvents Elf.making events |> List.tryHead
-                        |> Option.bind (fun (e,l) -> List.head l |> Option.map (addFst e))
+                        |> Option.bind (fun (e,l) -> List1.head l |> Option.map (addFst e))
                         )
 
                 elfMaking
@@ -122,7 +124,8 @@ module Procs =
             if Map.isEmpty assignNewToy |> not then
                 let santa = User.login "santa"
                 Map.iter (fun elf (_,newToy) ->
-                        Store.update santa elf [Elf.Making newToy] EventID.Zero elfStore |> ignore // TODO: Need to make making not concurrent
+                        let l = List1.singleton (Elf.Making newToy)
+                        Store.update santa elf l EventID.Zero elfStore |> ignore // TODO: Need to make making not concurrent
                     ) assignNewToy
 
         repeat run santaCheckTime

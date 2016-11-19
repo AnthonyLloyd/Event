@@ -29,7 +29,7 @@ type 'Aggregate ID = private Created of EventID
 module ID =
     let internal gen eventID = Created eventID
 
-type 'Aggregate Events = (EventID * 'Aggregate list) list
+type 'Aggregate Events = (EventID * 'Aggregate list1) list
 
 [<NoEquality;NoComparison>]
 type 'Aggregate MemoryStore = {Updates: Map<'Aggregate ID,'Aggregate Events>; Observers: IObserver<'Aggregate ID*'Aggregate Events> list}
@@ -56,8 +56,7 @@ module Store =
     type Error =
         | Concurrency
 
-    let update (user:UserID) (aggregateID:'Aggregate ID) (updates:'Aggregate list) (lastEvent:EventID) (store:'Aggregate Store) =
-        assert(List.isEmpty updates |> not)
+    let update (user:UserID) (aggregateID:'Aggregate ID) (updates:'Aggregate list1) (lastEvent:EventID) (store:'Aggregate Store) =
         match store with
         | MemoryStore storeRef ->
             let newStore,result =
@@ -71,8 +70,7 @@ module Store =
             if Result.isOk result then newStore.Observers |> Seq.iter (fun ob -> ob.OnNext(aggregateID,Map.find aggregateID newStore.Updates))
             result
 
-    let create (user:UserID) (updates:'Aggregate list) (store:'Aggregate Store) : Result<_,Error> =
-        assert(List.isEmpty updates |> not)
+    let create (user:UserID) (updates:'Aggregate list1) (store:'Aggregate Store) : Result<_,Error> =
         match store with
         | MemoryStore storeRef ->
             let newStore,result =
@@ -111,7 +109,7 @@ module SetEvent =
 
     let toSet (events:'a SetEvent Events) =
         Seq.map snd events
-        |> Seq.fold (List.fold (fun (removed,added) (se:'a SetEvent) ->
+        |> Seq.fold (List1.fold (fun (removed,added) (se:'a SetEvent) ->
                 match se with
                 | SetAdd a -> if Set.contains a removed then removed,added else removed,Set.add a added
                 | SetRemove a -> Set.add a removed,added
@@ -140,8 +138,8 @@ module Property =
     let create name setter getter validation = {Name=name; Getter=getter; Setter=setter; Validation=validation}
     let set (property:Property<'a,'b>) v = property.Setter v
     let get (property:Property<'a,'b>) (updates:'a Events) =
-        List.tryPick (snd >> List.tryPick property.Getter) updates
+        List.tryPick (snd >> List1.tryPick property.Getter) updates
     let getAndValidate (property:Property<'a,'b>) (updates:'a Events) =
         get property updates |> property.Validation
     let getEvents (property:Property<'a,'b>) (update:'a Events) : 'b Events =
-        List.choose (fun (e,l) -> match List.choose property.Getter l with | [] -> None | l -> Some (e,l)) update
+        List.choose (fun (e,l) -> List1.tryChoose property.Getter l |> Option.map (addFst e)) update

@@ -19,7 +19,7 @@ module Editor =
         | Edit e -> {model with Edit=e}
         | Reset -> {model with Edit=None}
         | Update l ->
-            let latest,previous = match l with |[e,[a]] -> Some(e,a),None |(le,[la])::(pe,[pa])::_ -> Some(le,la),Some(pe,pa) |_ -> None,None
+            let latest,previous = match l with | [e,a] -> Some(e,List1.head a),None | (le,la)::(pe,pa)::_ -> Some(le,List1.head la),Some(pe,List1.head pa) |_ -> None,None
             {model with
                 Previous = previous
                 Latest = latest

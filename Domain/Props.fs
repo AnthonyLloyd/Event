@@ -88,7 +88,7 @@ module Query =
         toDelta kidEvents
         |> Observable.choose (fun (elf,events) ->
             match List.collect (fun (eid,l) ->
-                List.choose Kid.wishList.Getter l 
+                List1.toList l |> List.choose Kid.wishList.Getter
                 |> List.map (function |SetAdd toy -> MapAdd (toy,eid) |SetRemove toy -> MapRemove toy)
                 ) events with
             | [] -> None
@@ -117,9 +117,9 @@ module Query =
         let toyFinished (elfEvents:IObservable<Elf ID * Elf Events>) =
             toDelta elfEvents
             |> Observable.choose (fun (elf,events) ->
-                    match List.collect (snd >> List.choose Elf.making.Getter) events with
-                    |[] -> None
-                    |l -> Some (elf,l)
+                    match List.collect (snd >> List1.toList >> List.choose Elf.making.Getter) events with
+                    | [] -> None
+                    | l -> Some (elf,l)
                 )
             |> Observable.scan (fun ((total,making),_) (elf,events) ->
                     let total = List.choose id events |> List.fold Map.incr total

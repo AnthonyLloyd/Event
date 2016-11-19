@@ -7,7 +7,7 @@ Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Domain", "Domain\Domain.fsp
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "WPF", "WPF\WPF.fsproj", "{0E894609-275E-41CE-9F28-70051F217CF6}"
 EndProject
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Banana", "Core\Banana.fsproj", "{D10375B8-FDBD-482D-A6D7-52DA16DEAE52}"
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Core", "Core\Core.fsproj", "{D10375B8-FDBD-482D-A6D7-52DA16DEAE52}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
