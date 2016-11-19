@@ -12,7 +12,7 @@ open Lloyd.Core.UI
 [<EntryPoint;STAThread>]
 let main _ =
     
-    let oldUser = User.login "someone"
+    let oldUser = User.login "old user"
 
     let rand = Random()
 
@@ -72,9 +72,9 @@ let main _ =
 
     let app = Apps.Main.app kidObservable toyObservable elfObservable toyProgressObservable commandHandler
 
-    let _kids = Procs.kidsRun kidObservable toyObservable elfObservable toyProgressObservable
+    use kids = Procs.kidsRun kidStore toyStore
     
-    let _santa = Procs.santaRun toyStore elfStore toyProgressObservable
+    use santa = Procs.santaRun toyStore elfStore toyProgressObservable
 
     WPF.CreateNaiveUI mainWindow |> UI.run app
 

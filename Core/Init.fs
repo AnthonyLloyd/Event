@@ -42,6 +42,7 @@ module Option =
         member __.Bind(v,f) = Option.bind f v
         member __.Return v = Some v
         member __.ReturnFrom o = o
+        member __.Zero() = None
 
 module Seq =
     let groupByFst s = Seq.groupBy fst s |> Seq.map (fun (k,l) -> k, Seq.map snd l)
@@ -177,6 +178,15 @@ module Common =
             let t,b = d.TryGetValue a
             if t then b
             else let b = f a in d.Add(a,b); b
+    let repeat action (timeSpan:TimeSpan) =
+        let cancel = new CancellationTokenSource()
+        let rec runLoop() = async {
+            do action()
+            do! Async.Sleep (int timeSpan.TotalMilliseconds)
+            do! runLoop()
+        }
+        Async.Start (runLoop(), cancel.Token)
+        {new IDisposable with member __.Dispose() = cancel.Cancel() }
     let inline flip f b a = f a b
     let inline between a b x = (a<=x&&x<=b) || (a>=x&&x>=b)
     let inline mapFst f (a,b) = f a,b
