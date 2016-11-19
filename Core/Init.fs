@@ -26,56 +26,6 @@ module Result =
         member __.Return v = Ok v
         member __.ReturnFrom o = o
 
-[<AutoOpen>]
-module ResultAuto =
-    let (<*>) = Result.apply
-    let attempt = Result.AttemptBuilder()
-
-
-[<AutoOpen>]
-module Common =
-    let rec atomicUpdate update state =
-        let oldState = !state
-        let newState = update oldState
-        if Interlocked.CompareExchange<_>(state, newState, oldState) |> LanguagePrimitives.PhysicalEquality oldState then oldState,newState
-        else atomicUpdate update state
-    let rec atomicUpdateQuery update state =
-        let oldState = !state
-        let newState,result = update oldState
-        if Interlocked.CompareExchange<_>(state, newState, oldState) |> LanguagePrimitives.PhysicalEquality oldState then newState,result
-        else atomicUpdateQuery update state
-    let deferred t f =
-        let nextTime = ref None
-        let rec check() = async {
-            atomicUpdate (Option.bind (fun (next,a) ->
-                let now = DateTime.UtcNow
-                if next>now then
-                    async {
-                        do! Async.Sleep(let ts=next-now in int ts.Milliseconds)
-                        do! check()
-                    } |> Async.Start
-                    Some(next,a)
-                else
-                    async { f a } |> Async.Start
-                    None
-            )) nextTime |> ignore
-        }
-        fun a ->
-            let oldNextTime,_ = atomicUpdate (fun _ -> let utc = DateTime.UtcNow in Some(utc.Add(t),a)) nextTime
-            if Option.isNone oldNextTime then check() |> Async.Start
-    let memoize f =
-        let d = Collections.Generic.Dictionary(HashIdentity.Structural)
-        fun a ->
-            let t,b = d.TryGetValue a
-            if t then b
-            else let b = f a in d.Add(a,b); b
-    let inline flip f b a = f a b
-    let inline between a b x = (a<=x&&x<=b) || (a>=x&&x>=b)
-    let inline mapFst f (a,b) = f a,b
-    let inline mapSnd f (a,b) = a,f b
-    let inline addFst a b = a,b
-    let inline addSnd a b = b,a
-    
 module String =
     let empty = String.Empty
     let nonEmpty s = if String.IsNullOrWhiteSpace s then None else s.Trim() |> Some
@@ -89,6 +39,10 @@ module Option =
     let orTry a o = match o with | None -> a | _ -> o
     let ofList l = match l with | [] -> None | l -> Some l
     let cons x xs = match x with | None -> xs | Some x -> x::xs
+    type OptionBuilder() =
+        member __.Bind(v,f) = Option.bind f v
+        member __.Return v = Some v
+        member __.ReturnFrom o = o
 
 module Seq =
     let groupByFst s = Seq.groupBy fst s |> Seq.map (fun (k,l) -> k, Seq.map snd l)
@@ -113,6 +67,16 @@ module Map =
         |> Map.map (fun k v -> chooser k v |> Option.get)
 
 module Observable =
+
+    let headAsync (o:IObservable<_>) =
+        async {
+            let wait = new System.Threading.ManualResetEventSlim()
+            let mutable v = Unchecked.defaultof<_>
+            let d = Observable.subscribe (fun i -> v<-i; wait.Set()) o
+            let! _ = Async.AwaitWaitHandle wait.WaitHandle
+            d.Dispose()
+            return v
+        }
 
     [<NoComparison>]
     type private 'a CacheLastMsg =
@@ -173,3 +137,51 @@ module Observable =
                 Add ob |> mbox.Post
                 {new IDisposable with member __.Dispose() = Remove ob |> mbox.Post }
         }
+
+[<AutoOpen>]
+module Common =
+    let (<*>) = Result.apply
+    let attempt = Result.AttemptBuilder()
+    let maybe = Option.OptionBuilder()
+    let rec atomicUpdate update state =
+        let oldState = !state
+        let newState = update oldState
+        if Interlocked.CompareExchange<_>(state, newState, oldState) |> LanguagePrimitives.PhysicalEquality oldState then oldState,newState
+        else atomicUpdate update state
+    let rec atomicUpdateQuery update state =
+        let oldState = !state
+        let newState,result = update oldState
+        if Interlocked.CompareExchange<_>(state, newState, oldState) |> LanguagePrimitives.PhysicalEquality oldState then newState,result
+        else atomicUpdateQuery update state
+    let deferred f =
+        let nextTime = ref None
+        let rec check() = async {
+            atomicUpdate (Option.bind (fun (next,a) ->
+                let now = DateTime.UtcNow
+                if next>now then
+                    async {
+                        do! Async.Sleep(let ts=next-now in int ts.Milliseconds)
+                        do! check()
+                    } |> Async.Start
+                    Some(next,a)
+                else
+                    async { f a } |> Async.Start
+                    None
+            )) nextTime |> ignore
+        }
+        fun t a ->
+            let oldNextTime,_ = atomicUpdate (fun _ -> let utc = DateTime.UtcNow in Some(utc.Add(t),a)) nextTime
+            if Option.isNone oldNextTime then check() |> Async.Start
+    let memoize f =
+        let d = Collections.Generic.Dictionary(HashIdentity.Structural)
+        fun a ->
+            let t,b = d.TryGetValue a
+            if t then b
+            else let b = f a in d.Add(a,b); b
+    let inline flip f b a = f a b
+    let inline between a b x = (a<=x&&x<=b) || (a>=x&&x>=b)
+    let inline mapFst f (a,b) = f a,b
+    let inline mapSnd f (a,b) = a,f b
+    let inline addFst a b = a,b
+    let inline addSnd a b = b,a
+    

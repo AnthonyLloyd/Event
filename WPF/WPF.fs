@@ -38,7 +38,8 @@ let CreateNaiveUI (root:ContentControl) =
 
     let updateTextBox =
         let update (tb:TextBox) t = root.Dispatcher.Invoke (fun () -> if tb.Text<>t then tb.Text<-t)
-        update >> deferred (TimeSpan.FromMilliseconds 200.0) |> memoize |> flip
+        fun tb -> deferred (update tb) (TimeSpan.FromMilliseconds 200.0)
+        |> memoize |> flip
 
     let updateUI ui (element:UIElement) =
         match ui with

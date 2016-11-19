@@ -188,4 +188,4 @@ module UI =
             ui.Event<-mb.Post
             nativeUI.Send [InsertUI([],ui.UI)]
             loop model ui subs
-        ) |> ignore
+        ) |> ignore //TODO Should be IDisposable?
