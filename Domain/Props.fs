@@ -55,7 +55,7 @@ module Kid =
         <*> Property.getAndValidate name events
         <*> Property.getAndValidate age events
         <*> Property.getAndValidate behaviour events
-        <*> (Property.getEvents wishList events |> SetEvent.toSet |> Ok)
+        <*> (Property.tryGetEvents wishList events |> Option.map SetEvent.toSet |> Option.getElse Set.empty |> Ok)
 
 
 
@@ -66,11 +66,11 @@ module Query =
         |> Observable.scan (fun (lastMap,_) (aid,events) ->
                 let eventsDiff =
                     match Map.tryFind aid lastMap with
-                    | None -> events
-                    | Some eid -> List.takeWhile (fst>>(<>)eid) events
-                Map.add aid (List.head events |> fst) lastMap, (aid,eventsDiff)
+                    | None -> List1.toList events
+                    | Some eid -> List1.toList events |> List.takeWhile (fst>>(<>)eid)
+                Map.add aid (List1.head events |> fst) lastMap, (aid,eventsDiff)
             ) (Map.empty,(Unchecked.defaultof<_>,List.empty))
-        |> Observable.map snd
+        |> Observable.choose (fun (_,(aid,l)) -> List1.tryOfList l |> Option.map (addFst aid))
 
     let kidName (kidEvents:IObservable<Kid ID * Kid Events>) =
         toDelta kidEvents
@@ -87,16 +87,11 @@ module Query =
     let kidWishListEvent (kidEvents:IObservable<Kid ID * Kid Events>) =
         toDelta kidEvents
         |> Observable.choose (fun (elf,events) ->
-            match List.collect (fun (eid,l) ->
-                List1.toList l |> List.choose Kid.wishList.Getter
-                |> List.map (function |SetAdd toy -> MapAdd (toy,eid) |SetRemove toy -> MapRemove toy)
-                ) events with
-            | [] -> None
-            | l -> Some (elf,l)
-            )
+            List1.tryCollect (fun (eid,l) -> List1.tryChoose Kid.wishList.Getter l |> Option.map (List1.map (function |SetAdd toy -> MapAdd (toy,eid) |SetRemove toy -> MapRemove toy))) events
+            |> Option.map (addFst elf))
         |> Observable.scan (fun (map,_) (kid,mapEvents) ->
-                let newSet = Map.tryFind kid map |> Option.getElse Map.empty |> MapEvent.update mapEvents
-                Map.add kid newSet map, (kid,newSet)
+            let newSet = Map.tryFind kid map |> Option.getElse Map.empty |> MapEvent.update mapEvents
+            Map.add kid newSet map, (kid,newSet)
             ) (Map.empty,Unchecked.defaultof<_>)
         |> Observable.map snd
 
@@ -116,15 +111,11 @@ module Query =
 
         let toyFinished (elfEvents:IObservable<Elf ID * Elf Events>) =
             toDelta elfEvents
-            |> Observable.choose (fun (elf,events) ->
-                    match List.collect (snd >> List1.toList >> List.choose Elf.making.Getter) events with
-                    | [] -> None
-                    | l -> Some (elf,l)
-                )
+            |> Observable.choose (fun (elf,events) -> List1.tryCollect (snd >> List1.tryChoose Elf.making.Getter) events |> Option.map (addFst elf))
             |> Observable.scan (fun ((total,making),_) (elf,events) ->
-                    let total = List.choose id events |> List.fold Map.incr total
-                    let making = Map.addOrRemove elf (List.head events) making
-                    let toysUpdated = List.tail events |> Seq.choose id |> Set.ofSeq
+                    let total = List1.toList events |> List.choose id |> List.fold Map.incr total
+                    let making = Map.addOrRemove elf (List1.head events) making
+                    let toysUpdated = List1.tail events |> Seq.choose id |> Set.ofSeq
                     let toysUpdatedTotal = Map.filter (fun toy _ -> Set.contains toy toysUpdated) total
                     let toysUpdate = Map.toSeq making |> Seq.map snd |> Seq.fold Map.decr toysUpdatedTotal |> Map.toList
                     (total,making),toysUpdate) ((Map.empty,Map.empty),[])

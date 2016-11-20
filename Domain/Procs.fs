@@ -26,7 +26,9 @@ module Procs =
                     |> Map.filter (fun _ (lo,hi) -> between lo hi age)
 
                 let wishList =
-                    Property.getEvents Kid.wishList kidEvents |> SetEvent.toSet
+                    Property.tryGetEvents Kid.wishList kidEvents
+                    |> Option.map SetEvent.toSet
+                    |> Option.getElse Set.empty
                     |> Set.filter (fun toy ->
                             match Map.tryFind toy toyAgeRange with
                             | None -> false
@@ -59,7 +61,7 @@ module Procs =
                 List1.tryOfList changes
                 |> Option.iter (fun l ->
                     let user = User.login "kid"
-                    let lastEvent = List.head kidEvents |> fst
+                    let lastEvent = List1.head kidEvents |> fst
                     Store.update user kid l lastEvent kidStore |> ignore
                 )
             } |> ignore
@@ -81,7 +83,8 @@ module Procs =
                 let elfMaking =
                     Store.getAll elfStore
                     |> Map.map (fun _ events ->
-                        Property.getEvents Elf.making events |> List.tryHead
+                        Property.tryGetEvents Elf.making events
+                        |> Option.map List1.head
                         |> Option.bind (fun (e,l) -> List1.head l |> Option.map (addFst e))
                         )
 

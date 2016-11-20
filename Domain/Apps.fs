@@ -35,7 +35,7 @@ module KidEdit =
                         Age = Editor.updateProperty Kid.age l model.Age
                         Behaviour = Editor.updateProperty Kid.behaviour l model.Behaviour
                         WishList = EditorSet.updateProperty Kid.wishList l model.WishList
-                        LastEvent = List.head l |> fst
+                        LastEvent = List1.head l |> fst
                       }, []
         | ToyNames m -> {model with ToyNames=m}, []
         | NameMsg n -> {model with Name=Editor.update n model.Name}, []
@@ -46,7 +46,7 @@ module KidEdit =
             let cmd =
                 model.WishList.Edit
                 |> Option.map (fun e ->
-                    let before = model.WishList.Latest |> Option.map (snd>>Set.ofList) |> Option.getElse Set.empty
+                    let before = model.WishList.Latest |> Option.map snd |> Option.getElse Set.empty
                     List.choose id e |> Set.ofList |> SetEvent.difference before |> List.map Kid.WishList
                 )
                 |> Option.getElse []
@@ -106,7 +106,7 @@ module ToyEdit =
                         Name = Editor.updateProperty Toy.name l model.Name
                         AgeRange = Editor.updateProperty Toy.ageRange l model.AgeRange
                         WorkRequired = Editor.updateProperty Toy.workRequired l model.WorkRequired
-                        LastEvent = List.head l |> fst
+                        LastEvent = List1.head l |> fst
                       }, []
         | NameMsg n -> {model with Name=Editor.update n model.Name}, []
         | AgeRangeMsg r -> {model with AgeRange=Editor.update r model.AgeRange}, []
@@ -168,7 +168,7 @@ module ElfEdit =
         | Update l -> {model with
                         Name = Editor.updateProperty Elf.name l model.Name
                         WorkRate = Editor.updateProperty Elf.workRate l model.WorkRate
-                        LastEvent = List.head l |> fst
+                        LastEvent = List1.head l |> fst
                       }, []
         | ToyNames m -> {model with ToyNames=m}, []
         | NameMsg n -> {model with Name=Editor.update n model.Name}, []

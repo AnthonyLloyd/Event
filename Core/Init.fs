@@ -73,6 +73,7 @@ type 'a list1 = private NonEmptyList of 'a list
 
 module List1 =
     let head (NonEmptyList l) = List.head l
+    let tail (NonEmptyList l) = List.tail l
     let init x xs = NonEmptyList(x::xs)
     let tryOfList l = match l with | [] -> None | x::xs -> init x xs |> Some
     let toList (NonEmptyList l) = l
@@ -83,6 +84,8 @@ module List1 =
     let tryPick chooser (NonEmptyList list) = List.tryPick chooser list
     let tryChoose chooser (NonEmptyList list) =
         match List.choose chooser list with | [] -> None | l -> NonEmptyList l |> Some
+    let tryCollect mapping (NonEmptyList list) =
+        List.choose mapping list |> List.collect toList |> tryOfList
 
 module Observable =
 

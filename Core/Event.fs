@@ -29,7 +29,7 @@ type 'Aggregate ID = private Created of EventID
 module ID =
     let internal gen eventID = Created eventID
 
-type 'Aggregate Events = (EventID * 'Aggregate list1) list
+type 'Aggregate Events = (EventID * 'Aggregate list1) list1
 
 [<NoEquality;NoComparison>]
 type 'Aggregate MemoryStore = {Updates: Map<'Aggregate ID,'Aggregate Events>; Observers: IObserver<'Aggregate ID*'Aggregate Events> list}
@@ -61,11 +61,11 @@ module Store =
         | MemoryStore storeRef ->
             let newStore,result =
                 atomicUpdateQuery (fun store ->
-                    match Map.tryFind aggregateID store.Updates with
-                    | Some ((eid,_)::_) when eid<>lastEvent -> store, Error Concurrency
-                    | o ->
+                    let l = Map.find aggregateID store.Updates
+                    if List1.head l |> fst = lastEvent then
                         let eventID = EventID.gen user
-                        {Updates=Map.add aggregateID ((eventID,updates)::Option.getElse [] o) store.Updates; Observers=store.Observers}, Ok ()
+                        {Updates=Map.add aggregateID (List1.init (eventID,updates) (List1.toList l)) store.Updates; Observers=store.Observers}, Ok ()
+                    else store, Error Concurrency
                 ) storeRef
             if Result.isOk result then newStore.Observers |> Seq.iter (fun ob -> ob.OnNext(aggregateID,Map.find aggregateID newStore.Updates))
             result
@@ -77,7 +77,7 @@ module Store =
                 atomicUpdateQuery (fun store ->
                     let eventID = EventID.gen user
                     let aggregateID = ID.gen eventID
-                    {Updates=Map.add aggregateID [eventID,updates] store.Updates; Observers=store.Observers}, Ok aggregateID
+                    {Updates=Map.add aggregateID (List1.singleton (eventID,updates)) store.Updates; Observers=store.Observers}, Ok aggregateID
                 ) storeRef
             match result with
             | Ok aggregateID -> newStore.Observers |> Seq.iter (fun ob -> ob.OnNext(aggregateID,Map.find aggregateID newStore.Updates))
@@ -108,7 +108,8 @@ module SetEvent =
         |> snd
 
     let toSet (events:'a SetEvent Events) =
-        Seq.map snd events
+        List1.toList events
+        |> Seq.map snd
         |> Seq.fold (List1.fold (fun (removed,added) (se:'a SetEvent) ->
                 match se with
                 | SetAdd a -> if Set.contains a removed then removed,added else removed,Set.add a added
@@ -123,7 +124,7 @@ type MapEvent<'k,'v> =
 module MapEvent =
     let update events m =
         let removedAndAdded =
-            List.fold (fun (removed,added) se ->
+            List1.fold (fun (removed,added) se ->
                     match se with
                     | MapAdd (k,v) -> if Set.contains k removed then removed,added else removed,Map.add k v added
                     | MapRemove k -> Set.add k removed,added
@@ -138,8 +139,8 @@ module Property =
     let create name setter getter validation = {Name=name; Getter=getter; Setter=setter; Validation=validation}
     let set (property:Property<'a,'b>) v = property.Setter v
     let get (property:Property<'a,'b>) (updates:'a Events) =
-        List.tryPick (snd >> List1.tryPick property.Getter) updates
+        List1.toList updates |> List.tryPick (snd >> List1.tryPick property.Getter)
     let getAndValidate (property:Property<'a,'b>) (updates:'a Events) =
         get property updates |> property.Validation
-    let getEvents (property:Property<'a,'b>) (update:'a Events) : 'b Events =
-        List.choose (fun (e,l) -> List1.tryChoose property.Getter l |> Option.map (addFst e)) update
+    let tryGetEvents (property:Property<'a,'b>) (update:'a Events) : 'b Events option =
+        List1.tryChoose (fun (e,l) -> List1.tryChoose property.Getter l |> Option.map (addFst e)) update
