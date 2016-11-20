@@ -169,6 +169,11 @@ module Common =
         let newState = update oldState
         if Interlocked.CompareExchange<_>(state, newState, oldState) |> LanguagePrimitives.PhysicalEquality oldState then oldState,newState
         else atomicUpdate update state
+    let rec atomicUpdateInt64 update state =
+        let (oldState:int64) = !state
+        let newState = update oldState
+        if Interlocked.CompareExchange(state, newState, oldState) |> (=)oldState then oldState,newState
+        else atomicUpdateInt64 update state
     let rec atomicUpdateQuery update state =
         let oldState = !state
         let newState,result = update oldState

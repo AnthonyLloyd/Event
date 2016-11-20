@@ -113,13 +113,14 @@ module Query =
             toDelta elfEvents
             |> Observable.choose (fun (elf,events) -> List1.tryCollect (snd >> List1.tryChoose Elf.making.Getter) events |> Option.map (addFst elf))
             |> Observable.scan (fun ((total,making),_) (elf,events) ->
-                    let total = List1.toList events |> List.choose id |> List.fold Map.incr total
-                    let making = Map.addOrRemove elf (List1.head events) making
-                    let toysUpdated = List1.tail events |> Seq.choose id |> Set.ofSeq
-                    let toysUpdatedTotal = Map.filter (fun toy _ -> Set.contains toy toysUpdated) total
-                    let toysUpdate = Map.toSeq making |> Seq.map snd |> Seq.fold Map.decr toysUpdatedTotal |> Map.toList
-                    (total,making),toysUpdate) ((Map.empty,Map.empty),[])
-            |> Observable.map snd
+                    let newTotal = List1.toList events |> List.choose id |> List.fold Map.incr total
+                    let newMaking = Map.addOrRemove elf (List1.head events) making
+                    let toyUpdate =
+                        let finished = Map.toSeq making |> Seq.map snd |> Seq.fold Map.decr total
+                        let newFinished = Map.toSeq newMaking |> Seq.map snd |> Seq.fold Map.decr newTotal
+                        Map.revisions finished newFinished |> Map.toList |> List1.tryOfList
+                    (newTotal,newMaking),toyUpdate) ((Map.empty,Map.empty),None)
+            |> Observable.choose snd
 
         let progress (finished:Map<Toy ID,int>) (ageRanges:Map<Toy ID,Age*Age>) (ages:Map<Kid ID,Age>) (behaviours:Map<Kid ID,Behaviour>) (wishListEvents:Map<Kid ID,Map<Toy ID,EventID>>) =
 
@@ -137,7 +138,11 @@ module Query =
             |> Map.toSeq
             |> Seq.collect (fun (kid,(behaviour,m)) -> Map.toSeq m |> Seq.map (fun (toy,eid) -> toy,((behaviour,eid),kid)))
             |> Seq.groupByFst
-            |> Seq.map (fun (toy,s) -> toy, Seq.sort s |> Seq.toList |> List.splitAt (Map.tryFind toy finished |> Option.getElse 0))
+            |> Seq.map (fun (toy,s) ->
+                let l = Seq.sort s |> Seq.toList
+                let i = Map.tryFind toy finished |> Option.map (min (List.length l)) |> Option.getElse 0
+                toy, List.splitAt i l
+                )
             |> Map.ofSeq
 
         toyFinished elfEvents |> Observable.map Choice1Of5
@@ -148,7 +153,7 @@ module Query =
         |> Observable.scan (fun (finished,ageRanges,ages,behaviours,wishListEvents) choice ->
                 match choice with
                 |Choice1Of5 l ->
-                    let finished = List.fold (fun f (toy,n) -> Map.add toy n f) finished l
+                    let finished = List1.fold (fun f (toy,n) -> Map.add toy n f) finished l
                     (finished,ageRanges,ages,behaviours,wishListEvents)
                 |Choice2Of5 (toy,ageRange) ->
                     let ageRanges = Map.add toy ageRange ageRanges

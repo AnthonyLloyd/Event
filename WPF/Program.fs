@@ -47,13 +47,14 @@ let main _ =
         Query.toyProgress kidObservable toyObservable elfObservable
         |> Observable.cacheLast
 
-    let mainWindow = Window()
+    let contentControl = Controls.ScrollViewer()
+    let mainWindow = Window(Title="Santa's Summary",Width=1300.0,Content=contentControl)
 
     let you = User.login "you"
 
-    let openApp app =
+    let openApp title app =
         mainWindow.Dispatcher.Invoke (fun () ->
-            let window = Window()
+            let window = Window(Title=title,Width=400.0)
             WPF.CreateNaiveUI window |> UI.run app
             window.Show()
         )
@@ -65,9 +66,9 @@ let main _ =
 
     let commandHandler cmd =
         match cmd with
-        | Apps.Cmd.OpenKidEdit kid -> Apps.KidEdit.app kid kidObservable toyObservable (saveHandler kidStore Apps.KidEdit.CreateResult Apps.KidEdit.UpdateResult) |> openApp
-        | Apps.Cmd.OpenToyEdit toy -> Apps.ToyEdit.app toy toyObservable (saveHandler toyStore Apps.ToyEdit.CreateResult Apps.ToyEdit.UpdateResult) |> openApp
-        | Apps.Cmd.OpenElfEdit elf -> Apps.ElfEdit.app elf elfObservable toyObservable (saveHandler elfStore Apps.ElfEdit.CreateResult Apps.ElfEdit.UpdateResult) |> openApp
+        | Apps.Cmd.OpenKidEdit kid -> Apps.KidEdit.app kid kidObservable toyObservable (saveHandler kidStore Apps.KidEdit.CreateResult Apps.KidEdit.UpdateResult) |> openApp "Kid"
+        | Apps.Cmd.OpenToyEdit toy -> Apps.ToyEdit.app toy toyObservable (saveHandler toyStore Apps.ToyEdit.CreateResult Apps.ToyEdit.UpdateResult) |> openApp "Toy"
+        | Apps.Cmd.OpenElfEdit elf -> Apps.ElfEdit.app elf elfObservable toyObservable (saveHandler elfStore Apps.ElfEdit.CreateResult Apps.ElfEdit.UpdateResult) |> openApp "Elf"
         None
 
     let app = Apps.Main.app kidObservable toyObservable elfObservable toyProgressObservable commandHandler
@@ -76,7 +77,7 @@ let main _ =
     
     use santa = Procs.santaRun toyStore elfStore toyProgressObservable
 
-    WPF.CreateNaiveUI mainWindow |> UI.run app
+    WPF.CreateNaiveUI contentControl |> UI.run app
 
     Application().Run(mainWindow) |> ignore
     

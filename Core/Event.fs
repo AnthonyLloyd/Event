@@ -1,6 +1,7 @@
 ﻿namespace Lloyd.Core
 
 open System
+open System.Diagnostics
 
 type UserID = private User of int
 
@@ -20,7 +21,18 @@ type EventID = private | EventID of time:DateTime * user:UserID
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module EventID =
-    let internal gen user = EventID(DateTime.UtcNow, user) // TODO: increment time so now dups
+    let private timestampAndTicks0 = // Better resolution and can syncronise to NTP server on startup
+        Stopwatch.GetTimestamp(), let d = DateTime.UtcNow in d.Ticks
+    let private ticks() =
+        let timestamp0,ticks0 = timestampAndTicks0
+        ticks0+((Stopwatch.GetTimestamp()-timestamp0)*TimeSpan.TicksPerSecond)/Stopwatch.Frequency
+    let lastTicks = ref 0L
+    let internal gen user =
+        let ticks = atomicUpdateInt64 (fun oldTicks ->
+                        let newTicks = ticks()
+                        if oldTicks=newTicks then oldTicks+1L
+                        else newTicks) lastTicks |> snd
+        EventID(DateTime ticks, user)
     let time (EventID(t,_)) = t
     let User (EventID(_,u)) = u
 

@@ -6,19 +6,21 @@ open Lloyd.Core
 /// Message event used on the primative UI components.
 type 'msg Event = ('msg->unit) ref ref
 
-/// Layout for a section of UI components.
-type Layout = Horizontal | Vertical
-
-type InputType = AnyText | Digits
+/// Style for a section of UI components.
+type TextStyle = Bold | Width of int
+type InputStyle = AnyText | Digits | Width of int
+type SelectStyle = Width of int
+type ButtonStyle = Disabled | Width of int
+type DivStyle = Horizontal | Vertical | Width of int
 
 /// Primative UI components.
 [<NoEquality;NoComparison>]
 type UI =
-    | Text of string
-    | Input of InputType * string * string Event
-    | Select of string list * int option * int option Event
-    | Button of string * unit Event
-    | Div of Layout * UI list
+    | Text of TextStyle list * string
+    | Input of InputStyle list * string * string Event
+    | Select of SelectStyle list * string list * int option * int option Event
+    | Button of ButtonStyle list * string * unit Event
+    | Div of DivStyle list * UI list
 
 /// UI component update and event redirection.
 [<NoEquality;NoComparison>]
@@ -62,46 +64,46 @@ module UI =
                 ui
 
     /// Returns a Text display UI component.
-    let text text = {UI=Text text;Event=ignore}
+    let text style text = {UI=Text (style,text);Event=ignore}
     
     /// Returns a text Input UI component.
     let inputText text =
         let ev = ref ignore |> ref
-        let ui = {UI=Input(AnyText,Option.toObj text,ev);Event=ignore}
+        let ui = {UI=Input([AnyText],Option.toObj text,ev);Event=ignore}
         let raise a = String.nonEmpty a |> ui.Event
         (!ev):=raise
         ui
 
     let inline inputDigits (digits:'a option) : 'a option UI =
         let ev = ref ignore |> ref
-        let ui = {UI=Input(Digits,Option.map string digits |> Option.toObj,ev);Event=ignore}
+        let ui = {UI=Input([Digits],Option.map string digits |> Option.toObj,ev);Event=ignore}
         let raise a = String.tryParse a |> ui.Event
         (!ev):=raise
         ui
 
     /// Returns a generic Select UI component.
-    let select options current =
+    let select style options current =
         let options = List.sortBy snd options
         let ev = ref ignore |> ref
         let ui =
             let strings = List.map snd options
             let selected = Option.bind (fun c -> List.tryFindIndex (fst>>(=)c) options) current
-            {UI=Select(strings,selected,ev);Event=ignore}
+            {UI=Select(style,strings,selected,ev);Event=ignore}
         let raise a = Option.map (fun i -> List.item i options |> fst) a |> ui.Event
         (!ev):=raise
         ui
 
     /// Returns a Button UI component.
-    let button text msg =
+    let button style text msg =
         let ev = ref ignore |> ref
-        let ui = {UI=Button(text,ev);Event=ignore}
+        let ui = {UI=Button(style,text,ev);Event=ignore}
         (!ev):=fun () -> ui.Event msg
         ui
 
     /// Returns a section of UI components given a layout.
     /// The name div comes from HTML and represents a division (or section) of UI components.
-    let div layout list =
-        let ui = {UI=Div(layout,List.map (fun ui -> ui.UI) list);Event=ignore}
+    let div style list =
+        let ui = {UI=Div(style,List.map (fun ui -> ui.UI) list);Event=ignore}
         let raise a = ui.Event a
         List.iter (fun i -> i.Event<-raise) list
         ui
@@ -118,9 +120,9 @@ module UI =
         let mutable hi = Option.map snd range
         let range() = match lo,hi with | Some l,Some h -> Some (l,h) |_ -> None
         let ui =
-            div Horizontal [
+            div [Horizontal] [
                 inputDigits lo |> map Choice1Of2
-                text " - "
+                text [] " - "
                 inputDigits hi |> map Choice2Of2
             ]
         let ui2 = {UI=ui.UI;Event=ignore}
@@ -140,11 +142,10 @@ module UI =
         let rec diff ui1 ui2 path index diffs =
             match ui1,ui2 with
             | _,_ when LanguagePrimitives.PhysicalEquality ui1 ui2 -> diffs
-            | Text t1,Text t2 -> if t1=t2 then diffs else UpdateUI(path,ui2)::diffs
-            | Button (t1,e1),Button (t2,e2) -> if t1=t2 then EventUI(update e1 e2)::diffs else EventUI(update e1 e2)::UpdateUI(path,ui2)::diffs
+            | Text (y1,t1),Text (y2,t2) -> if t1=t2 && y1=y2 then diffs else UpdateUI(path,ui2)::diffs
+            | Button (s1,t1,e1),Button (s2,t2,e2) -> if s1=s2 && t1=t2 then EventUI(update e1 e2)::diffs else EventUI(update e1 e2)::UpdateUI(path,ui2)::diffs
             | Input (c1,t1,e1),Input (c2,t2,e2) -> if c1=c2 && t1=t2 then EventUI(update e1 e2)::diffs else EventUI(update e1 e2)::UpdateUI(path,ui2)::diffs
-            | Select (o1,s1,e1),Select (o2,s2,e2) -> if o1=o2 && s1=s2 then EventUI(update e1 e2)::diffs else EventUI(update e1 e2)::UpdateUI(path,ui2)::diffs
-            //|Button _,Button _ |Input _,Input _ -> UpdateUI(path,ui2)::diffs
+            | Select (y1,o1,s1,e1),Select (y2,o2,s2,e2) -> if y1=y2 && o1=o2 && s1=s2 then EventUI(update e1 e2)::diffs else EventUI(update e1 e2)::UpdateUI(path,ui2)::diffs
             | Div (l1,_),Div (l2,_) when l1<>l2 -> ReplaceUI(index::path,ui2)::diffs
             | Div (_,[]),Div (_,[]) -> diffs
             | Div (_,[]),Div (_,l) -> List.fold (fun (i,diffs) ui -> i+1,InsertUI(i::path,ui)::diffs) (index,diffs) l |> snd

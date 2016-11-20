@@ -70,6 +70,8 @@ module Procs =
 
     let santaRun toyStore elfStore toyProgress =
         let run() =
+            let elfEvents = Store.getAll elfStore
+
             let elfToyFinishTime =
 
                 let toyWorkRequired =
@@ -77,16 +79,14 @@ module Procs =
                     |> Map.choose (fun _ -> Property.get Toy.workRequired)
 
                 let elfWorkRate =
-                    Store.getAll elfStore
-                    |> Map.choose (fun _ -> Property.get Elf.workRate)
+                    Map.choose (fun _ -> Property.get Elf.workRate) elfEvents
 
                 let elfMaking =
-                    Store.getAll elfStore
-                    |> Map.map (fun _ events ->
+                    Map.map (fun _ events ->
                         Property.tryGetEvents Elf.making events
                         |> Option.map List1.head
                         |> Option.bind (fun (e,l) -> List1.head l |> Option.map (addFst e))
-                        )
+                        ) elfEvents
 
                 elfMaking
                 |> Map.map (fun elf making ->
@@ -128,7 +128,8 @@ module Procs =
                 let santa = User.login "santa"
                 Map.iter (fun elf (_,newToy) ->
                         let l = List1.singleton (Elf.Making newToy)
-                        Store.update santa elf l EventID.Zero elfStore |> ignore // TODO: Need to make making not concurrent
+                        let lastEvent = Map.find elf elfEvents |> List1.head |> fst
+                        Store.update santa elf l lastEvent elfStore |> ignore
                     ) assignNewToy
 
         repeat run santaCheckTime

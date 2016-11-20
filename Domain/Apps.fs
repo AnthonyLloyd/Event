@@ -73,12 +73,12 @@ module KidEdit =
         |> Map.ofList
 
     let view model =
-        UI.div Vertical [
+        UI.div [Vertical] [
             Editor.view UI.inputText model.Name |> UI.map NameMsg
             Editor.view UI.inputDigits model.Age |> UI.map AgeMsg
-            Editor.view (UI.select [Bad,"Bad";Mixed,"Mixed";Good,"Good"]) model.Behaviour |> UI.map BehaviourMsg
-            EditorSet.view (UI.select (Map.toList model.ToyNames)) model.WishList |> UI.map WishListMsg
-            UI.button "Save" Save
+            Editor.view (UI.select [] [Bad,"Bad";Mixed,"Mixed";Good,"Good"]) model.Behaviour |> UI.map BehaviourMsg
+            EditorSet.view (UI.select [] (Map.toList model.ToyNames)) model.WishList |> UI.map WishListMsg
+            UI.button [] "Save" Save
         ]
 
     let app kid kidEvents toyEvents handler = UI.app (fun () -> init kid) update view (subscription kidEvents toyEvents) handler
@@ -136,11 +136,11 @@ module ToyEdit =
         |> Option.toList |> Map.ofList
 
     let view model =
-        UI.div Vertical [
+        UI.div [Vertical] [
             Editor.view UI.inputText model.Name |> UI.map NameMsg
             Editor.view UI.inputRange model.AgeRange |> UI.map AgeRangeMsg
             Editor.view UI.inputDigits model.WorkRequired |> UI.map EffortMsg
-            UI.button "Save" Save
+            UI.button [] "Save" Save
         ]
 
     let app toy toyEvents handler =
@@ -198,11 +198,11 @@ module ElfEdit =
 
     let view model =
         let making = Option.bind (fun tid -> Map.tryFind tid model.ToyNames) model.Making |> Option.getElse "Nothing"
-        UI.div Vertical [
+        UI.div [Vertical] [
             Editor.view UI.inputText model.Name |> UI.map NameMsg
             Editor.view UI.inputDigits model.WorkRate |> UI.map WorkRateMsg
-            UI.button "Save" Save
-            UI.text (Elf.making.Name+": "+making)
+            UI.button [] "Save" Save
+            UI.text [] (Elf.making.Name+": "+making)
         ]
 
     let app elf elfEvents toyEvents handler = UI.app (fun () -> init elf) update view (subscription elfEvents toyEvents) handler
@@ -255,10 +255,21 @@ module KidList =
         fun (_:Model) -> subs
 
     let view model =
-        let header = UI.div Horizontal [UI.text "Kid"; UI.text "Requested"; UI.text "Finished"; UI.button "new" (OpenEdit None)]
+        let header =
+            UI.div [Horizontal] [
+                UI.text [Bold;TextStyle.Width 150] "Kid"
+                UI.text [Bold;TextStyle.Width 70] "Requested"
+                UI.text [Bold;TextStyle.Width 70] "Finished"
+                UI.button [ButtonStyle.Width 50] "new" (OpenEdit None)
+            ]
         let rowUI row =
-            UI.div Horizontal [UI.text row.Name; UI.text (string row.Requested); UI.text (string row.Finished); UI.button "edit" (OpenEdit (Some row.ID))]
-        header::List.map rowUI model |> UI.div Vertical
+            UI.div [Horizontal] [
+                UI.text [TextStyle.Width 150] row.Name
+                UI.text [TextStyle.Width 70] (string row.Requested)
+                UI.text [TextStyle.Width 70] (string row.Finished)
+                UI.button [ButtonStyle.Width 50] "edit" (OpenEdit (Some row.ID))
+            ]
+        header::List.map rowUI model |> UI.div [Vertical;Width 400]
 
     let app kidEvents toyProgress handler = UI.app init update view (subscription kidEvents toyProgress) handler
 
@@ -309,12 +320,22 @@ module ToyList =
             ]
         fun (_:Model) -> subs
 
-
     let view model =
-        let header = UI.div Horizontal [UI.text "Toy"; UI.text "Requested"; UI.text "Finished"; UI.button "new" (OpenEdit None)]
+        let header =
+            UI.div [Horizontal] [
+                UI.text [Bold;TextStyle.Width 150] "Toy"
+                UI.text [Bold;TextStyle.Width 70] "Requested"
+                UI.text [Bold;TextStyle.Width 70] "Finished"
+                UI.button [ButtonStyle.Width 50] "new" (OpenEdit None)
+            ]
         let rowUI row =
-            UI.div Horizontal [UI.text row.Name; UI.text (string row.Requested); UI.text (string row.Finished); UI.button "edit" (OpenEdit (Some row.ID))]
-        header::List.map rowUI model |> UI.div Vertical
+            UI.div [Horizontal] [
+                UI.text [TextStyle.Width 150] row.Name
+                UI.text [TextStyle.Width 70] (string row.Requested)
+                UI.text [TextStyle.Width 70] (string row.Finished)
+                UI.button [ButtonStyle.Width 50] "edit" (OpenEdit (Some row.ID))
+            ]
+        header::List.map rowUI model |> UI.div [Vertical;Width 400]
 
     let app toyEvents toyProgress handler = UI.app init update view (subscription toyEvents toyProgress) handler
 
@@ -357,11 +378,20 @@ module ElfList =
         fun (_:Model) -> subs
 
     let view model =
-        let header = UI.div Horizontal [UI.text "Elf"; UI.text "Making"; UI.button "new" (OpenEdit None)]
+        let header =
+            UI.div [Horizontal] [
+                UI.text [Bold;TextStyle.Width 160] "Elf"
+                UI.text [Bold;TextStyle.Width 140] "Making"
+                UI.button [ButtonStyle.Width 50] "new" (OpenEdit None)
+            ]
         let rowUI row =
             let making = Option.bind (fun tid -> Map.tryFind tid model.ToyNames) row.Making |> Option.getElse String.empty
-            UI.div Horizontal [UI.text row.Name; UI.text making; UI.button "edit" (OpenEdit (Some row.ID))]
-        header::List.map rowUI model.Rows |> UI.div Vertical
+            UI.div [Horizontal] [
+                UI.text [TextStyle.Width 160] row.Name
+                UI.text [TextStyle.Width 140] making
+                UI.button [ButtonStyle.Width 50] "edit" (OpenEdit (Some row.ID))
+            ]
+        header::List.map rowUI model.Rows |> UI.div [Vertical;Width 400]
 
     let app elfEvents toyEvents handler = UI.app init update view (subscription elfEvents toyEvents) handler
 
@@ -398,7 +428,7 @@ module Main =
         |> Map.ofSeq
 
     let view model =
-        UI.div Horizontal [
+        UI.div [Horizontal] [
             KidList.view model.Kid |> UI.map KidMsg
             ToyList.view model.Toy |> UI.map ToyMsg
             ElfList.view model.Elf |> UI.map ElfMsg
