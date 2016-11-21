@@ -34,7 +34,7 @@ module Editor =
     let view inputUI model =
         let current = model.Edit |> Option.orTry (Option.map snd model.Latest)
         UI.div [Vertical] [
-            UI.text [] model.Label
+            UI.text [Bold] model.Label
             inputUI current |> UI.map Edit
         ]
 
@@ -76,7 +76,7 @@ module EditorSet =
         | Some events -> update (Update events) model
 
     let view inputUI model =
-        let header = UI.div [Horizontal] [UI.text [] model.Label ; UI.button [] "+" Insert]
-        let item i a = UI.div [Horizontal] [inputUI a |> UI.map (fun v -> Modify(i,v)); UI.button [] "-" (Remove i)]
+        let header = UI.div [Horizontal] [UI.text [Bold;TextStyle.Width 150] model.Label ; UI.button [ButtonStyle.Width 20] "+" Insert]
+        let item i a = UI.div [Horizontal] [inputUI [SelectStyle.Width 150] a |> UI.map (fun v -> Modify(i,v)); UI.button [ButtonStyle.Width 20] "-" (Remove i)]
         let items = current model |> List.mapi item
         header::items |> UI.div [Vertical]

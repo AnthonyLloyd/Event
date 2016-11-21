@@ -32,8 +32,8 @@
     <Compile Include="Apps.fs" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\Core\Core.fsproj">
-      <Name>Core</Name>
+    <ProjectReference Include="..\Core\CoreX.fsproj">
+      <Name>CoreX</Name>
       <Project>{d10375b8-fdbd-482d-a6d7-52da16deae52}</Project>
       <Private>True</Private>
     </ProjectReference>

@@ -12,10 +12,27 @@ type Cmd =
 
 
 module KidEdit =
-    type Model = {ID:Kid ID option; Name:string Editor.Model; Age:Age Editor.Model; Behaviour:Behaviour Editor.Model; WishList:Toy ID EditorSet.Model; LastEvent:EventID; ToyNames:Map<Toy ID,string>}
+    type Model = {
+        ID: Kid ID option
+        Name: string Editor.Model
+        Age: Age Editor.Model
+        Behaviour: Behaviour Editor.Model
+        WishList: Toy ID EditorSet.Model
+        LastEvent: EventID
+        ToyNames: Map<Toy ID,string>
+        SaveMessage: string
+    }
 
     let init kid =
-        {ID=kid; Name=Editor.init Kid.name; Age=Editor.init Kid.age; Behaviour=Editor.init Kid.behaviour; WishList=EditorSet.init Kid.wishList; LastEvent=EventID.Zero; ToyNames=Map.empty}, []
+        {
+            ID=kid
+            Name=Editor.init Kid.name
+            Age=Editor.init Kid.age
+            Behaviour=Editor.init Kid.behaviour
+            WishList=EditorSet.init Kid.wishList
+            LastEvent=EventID.Zero
+            ToyNames=Map.empty
+            SaveMessage=String.empty}, []
 
     type Msg =
         | Update of Kid Events
@@ -38,10 +55,10 @@ module KidEdit =
                         LastEvent = List1.head l |> fst
                       }, []
         | ToyNames m -> {model with ToyNames=m}, []
-        | NameMsg n -> {model with Name=Editor.update n model.Name}, []
-        | AgeMsg r -> {model with Age=Editor.update r model.Age}, []
-        | BehaviourMsg c -> {model with Behaviour=Editor.update c model.Behaviour}, []
-        | WishListMsg w -> {model with WishList=EditorSet.update w model.WishList}, []
+        | NameMsg n -> {model with Name=Editor.update n model.Name; SaveMessage=String.empty}, []
+        | AgeMsg r -> {model with Age=Editor.update r model.Age; SaveMessage=String.empty}, []
+        | BehaviourMsg c -> {model with Behaviour=Editor.update c model.Behaviour; SaveMessage=String.empty}, []
+        | WishListMsg w -> {model with WishList=EditorSet.update w model.WishList; SaveMessage=String.empty}, []
         | Save ->
             let cmd =
                 model.WishList.Edit
@@ -56,12 +73,12 @@ module KidEdit =
                 |> List1.tryOfList
                 |> Option.map (addFst model.ID >> addSnd model.LastEvent)
                 |> Option.toList
-            model, cmd
-        | CreateResult r ->
-            match r with
-            | Ok kid -> {model with ID=Some kid}, []
-            | Error _ -> model, []
-        | UpdateResult _ -> model, []
+            (if List.isEmpty cmd then model else {model with SaveMessage="Saving..."}), cmd
+        | CreateResult (Ok kid) -> {model with ID=Some kid; SaveMessage="Saved"}, []
+        | UpdateResult (Ok ()) -> {model with SaveMessage="Saved"}, []
+        | CreateResult (Error Store.Error.Concurrency)
+        | UpdateResult (Error Store.Error.Concurrency) ->
+            {model with SaveMessage="Update happened during save, please retry"}, []
 
     type Sub =
         | Kid of Kid ID
@@ -77,18 +94,32 @@ module KidEdit =
             Editor.view UI.inputText model.Name |> UI.map NameMsg
             Editor.view UI.inputDigits model.Age |> UI.map AgeMsg
             Editor.view (UI.select [] [Bad,"Bad";Mixed,"Mixed";Good,"Good"]) model.Behaviour |> UI.map BehaviourMsg
-            EditorSet.view (UI.select [] (Map.toList model.ToyNames)) model.WishList |> UI.map WishListMsg
-            UI.button [] "Save" Save
+            EditorSet.view (fun style current -> UI.select style (Map.toList model.ToyNames) current) model.WishList |> UI.map WishListMsg
+            UI.div [Horizontal] [UI.button [] "Save" Save; UI.text [] model.SaveMessage]
         ]
 
     let app kid kidEvents toyEvents handler = UI.app (fun () -> init kid) update view (subscription kidEvents toyEvents) handler
 
 
 module ToyEdit =
-    type Model = {ID:Toy ID option; Name:string Editor.Model; AgeRange:(Age*Age) Editor.Model; WorkRequired:uint16 Editor.Model; LastEvent:EventID}
+    type Model = {
+        ID: Toy ID option
+        Name: string Editor.Model
+        AgeRange: (Age*Age) Editor.Model
+        WorkRequired: uint16 Editor.Model
+        LastEvent: EventID
+        SaveMessage: string
+    }
 
     let init toy =
-        {ID=toy; Name=Editor.init Toy.name; AgeRange=Editor.init Toy.ageRange; WorkRequired=Editor.init Toy.workRequired; LastEvent=EventID.Zero}, []
+        {
+            ID=toy
+            Name=Editor.init Toy.name
+            AgeRange=Editor.init Toy.ageRange
+            WorkRequired=Editor.init Toy.workRequired
+            LastEvent=EventID.Zero
+            SaveMessage=String.empty
+        }, []
 
     type Msg =
         | Update of Toy Events
@@ -100,7 +131,6 @@ module ToyEdit =
         | UpdateResult of Result<unit,Store.Error>
 
     let update msg model =
-        printfn "Toy.update: %A" msg
         match msg with
         | Update l -> {model with
                         Name = Editor.updateProperty Toy.name l model.Name
@@ -108,9 +138,9 @@ module ToyEdit =
                         WorkRequired = Editor.updateProperty Toy.workRequired l model.WorkRequired
                         LastEvent = List1.head l |> fst
                       }, []
-        | NameMsg n -> {model with Name=Editor.update n model.Name}, []
-        | AgeRangeMsg r -> {model with AgeRange=Editor.update r model.AgeRange}, []
-        | EffortMsg c -> {model with WorkRequired=Editor.update c model.WorkRequired}, []
+        | NameMsg n -> {model with Name=Editor.update n model.Name; SaveMessage=String.empty}, []
+        | AgeRangeMsg r -> {model with AgeRange=Editor.update r model.AgeRange; SaveMessage=String.empty}, []
+        | EffortMsg c -> {model with WorkRequired=Editor.update c model.WorkRequired; SaveMessage=String.empty}, []
         | Save ->
             let cmd =
                 Option.cons (Option.map (Property.set Toy.name) model.Name.Edit) []
@@ -120,11 +150,11 @@ module ToyEdit =
                 |> Option.map (addFst model.ID >> addSnd model.LastEvent)
                 |> Option.toList
             model, cmd
-        | CreateResult r ->
-            match r with
-            | Ok toy -> {model with ID=Some toy}, []
-            | Error _ -> model, []
-        | UpdateResult _ -> model, []
+        | CreateResult (Ok toy) -> {model with ID=Some toy; SaveMessage="Saved"}, []
+        | UpdateResult (Ok ()) -> {model with SaveMessage="Saved"}, []
+        | CreateResult (Error Store.Error.Concurrency)
+        | UpdateResult (Error Store.Error.Concurrency) ->
+            {model with SaveMessage="Update happened during save, please retry"}, []
 
     type Sub =
         | Toy of Toy ID
@@ -140,7 +170,7 @@ module ToyEdit =
             Editor.view UI.inputText model.Name |> UI.map NameMsg
             Editor.view UI.inputRange model.AgeRange |> UI.map AgeRangeMsg
             Editor.view UI.inputDigits model.WorkRequired |> UI.map EffortMsg
-            UI.button [] "Save" Save
+            UI.div [Horizontal] [UI.button [] "Save" Save; UI.text [] model.SaveMessage]
         ]
 
     let app toy toyEvents handler =
@@ -148,10 +178,26 @@ module ToyEdit =
 
 
 module ElfEdit =
-    type Model = {ID:Elf ID option; Name:string Editor.Model; WorkRate:Work Editor.Model; Making:Toy ID option; LastEvent:EventID; ToyNames:Map<Toy ID,string>}
+    type Model = {
+        ID: Elf ID option
+        Name: string Editor.Model
+        WorkRate: Work Editor.Model
+        Making: Toy ID option
+        LastEvent: EventID
+        ToyNames: Map<Toy ID,string>
+        SaveMessage: string
+    }
 
     let init elf =
-        {ID=elf; Name=Editor.init Elf.name; WorkRate=Editor.init Elf.workRate; Making=None; LastEvent=EventID.Zero; ToyNames=Map.empty}, []
+        {
+            ID=elf
+            Name=Editor.init Elf.name
+            WorkRate=Editor.init Elf.workRate
+            Making=None
+            LastEvent=EventID.Zero
+            ToyNames=Map.empty
+            SaveMessage=String.empty
+        }, []
 
     type Msg =
         | Update of Elf Events
@@ -163,16 +209,16 @@ module ElfEdit =
         | UpdateResult of Result<unit,Store.Error>
 
     let update msg model =
-        printfn "Elf.update: %A" msg
         match msg with
         | Update l -> {model with
                         Name = Editor.updateProperty Elf.name l model.Name
                         WorkRate = Editor.updateProperty Elf.workRate l model.WorkRate
+                        Making = Property.get Elf.making l |> Option.bind id
                         LastEvent = List1.head l |> fst
                       }, []
         | ToyNames m -> {model with ToyNames=m}, []
-        | NameMsg n -> {model with Name=Editor.update n model.Name}, []
-        | WorkRateMsg r -> {model with WorkRate=Editor.update r model.WorkRate}, []
+        | NameMsg n -> {model with Name=Editor.update n model.Name; SaveMessage=String.empty}, []
+        | WorkRateMsg r -> {model with WorkRate=Editor.update r model.WorkRate; SaveMessage=String.empty}, []
         | Save ->
             let cmd =
                 Option.cons (Option.map (Property.set Elf.name) model.Name.Edit) []
@@ -181,11 +227,11 @@ module ElfEdit =
                 |> Option.map (addFst model.ID >> addSnd model.LastEvent)
                 |> Option.toList
             model, cmd
-        | CreateResult r ->
-            match r with
-            | Ok elf -> {model with ID=Some elf}, []
-            | Error _ -> model, []
-        | UpdateResult _ -> model, []
+        | CreateResult (Ok toy) -> {model with ID=Some toy; SaveMessage="Saved"}, []
+        | UpdateResult (Ok ()) -> {model with SaveMessage="Saved"}, []
+        | CreateResult (Error Store.Error.Concurrency)
+        | UpdateResult (Error Store.Error.Concurrency) ->
+            {model with SaveMessage="Update happened during save, please retry"}, []
 
     type Sub =
         | Elf of Elf ID
@@ -201,8 +247,8 @@ module ElfEdit =
         UI.div [Vertical] [
             Editor.view UI.inputText model.Name |> UI.map NameMsg
             Editor.view UI.inputDigits model.WorkRate |> UI.map WorkRateMsg
-            UI.button [] "Save" Save
-            UI.text [] (Elf.making.Name+": "+making)
+            UI.div [Horizontal] [UI.button [] "Save" Save; UI.text [] model.SaveMessage]
+            UI.div [Horizontal] [UI.text [Bold] (Elf.making.Name+":"); UI.text [] making]
         ]
 
     let app elf elfEvents toyEvents handler = UI.app (fun () -> init elf) update view (subscription elfEvents toyEvents) handler
