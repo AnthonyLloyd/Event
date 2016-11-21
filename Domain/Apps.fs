@@ -48,16 +48,16 @@ module KidEdit =
     let update msg model =
         match msg with
         | Update l -> {model with
-                        Name = Editor.updateProperty Kid.name l model.Name
-                        Age = Editor.updateProperty Kid.age l model.Age
-                        Behaviour = Editor.updateProperty Kid.behaviour l model.Behaviour
+                        Name = Editor.eventUpdate Kid.name l model.Name
+                        Age = Editor.eventUpdate Kid.age l model.Age
+                        Behaviour = Editor.eventUpdate Kid.behaviour l model.Behaviour
                         WishList = EditorSet.updateProperty Kid.wishList l model.WishList
                         LastEvent = List1.head l |> fst
                       }, []
         | ToyNames m -> {model with ToyNames=m}, []
-        | NameMsg n -> {model with Name=Editor.update n model.Name; SaveMessage=String.empty}, []
-        | AgeMsg r -> {model with Age=Editor.update r model.Age; SaveMessage=String.empty}, []
-        | BehaviourMsg c -> {model with Behaviour=Editor.update c model.Behaviour; SaveMessage=String.empty}, []
+        | NameMsg n -> {model with Name=Editor.updateAndValidate Kid.name n model.Name; SaveMessage=String.empty}, []
+        | AgeMsg r -> {model with Age=Editor.updateAndValidate Kid.age r model.Age; SaveMessage=String.empty}, []
+        | BehaviourMsg c -> {model with Behaviour=Editor.updateAndValidate Kid.behaviour c model.Behaviour; SaveMessage=String.empty}, []
         | WishListMsg w -> {model with WishList=EditorSet.update w model.WishList; SaveMessage=String.empty}, []
         | Save ->
             let cmd =
@@ -67,9 +67,9 @@ module KidEdit =
                     List.choose id e |> Set.ofList |> SetEvent.difference before |> List.map Kid.WishList
                 )
                 |> Option.getElse []
-                |> Option.cons (Option.map (Property.set Kid.name) model.Name.Edit)
-                |> Option.cons (Option.map (Property.set Kid.age) model.Age.Edit)
-                |> Option.cons (Option.map (Property.set Kid.behaviour) model.Behaviour.Edit)
+                |> Option.cons (Option.map Kid.Name model.Name.Edit)
+                |> Option.cons (Option.map Kid.Age model.Age.Edit)
+                |> Option.cons (Option.map Kid.Behaviour model.Behaviour.Edit)
                 |> List1.tryOfList
                 |> Option.map (addFst model.ID >> addSnd model.LastEvent)
                 |> Option.toList
@@ -133,14 +133,14 @@ module ToyEdit =
     let update msg model =
         match msg with
         | Update l -> {model with
-                        Name = Editor.updateProperty Toy.name l model.Name
-                        AgeRange = Editor.updateProperty Toy.ageRange l model.AgeRange
-                        WorkRequired = Editor.updateProperty Toy.workRequired l model.WorkRequired
+                        Name = Editor.eventUpdate Toy.name l model.Name
+                        AgeRange = Editor.eventUpdate Toy.ageRange l model.AgeRange
+                        WorkRequired = Editor.eventUpdate Toy.workRequired l model.WorkRequired
                         LastEvent = List1.head l |> fst
                       }, []
-        | NameMsg n -> {model with Name=Editor.update n model.Name; SaveMessage=String.empty}, []
-        | AgeRangeMsg r -> {model with AgeRange=Editor.update r model.AgeRange; SaveMessage=String.empty}, []
-        | EffortMsg c -> {model with WorkRequired=Editor.update c model.WorkRequired; SaveMessage=String.empty}, []
+        | NameMsg n -> {model with Name=Editor.updateAndValidate Toy.name n model.Name; SaveMessage=String.empty}, []
+        | AgeRangeMsg r -> {model with AgeRange=Editor.updateAndValidate Toy.ageRange r model.AgeRange; SaveMessage=String.empty}, []
+        | EffortMsg c -> {model with WorkRequired=Editor.updateAndValidate Toy.workRequired c model.WorkRequired; SaveMessage=String.empty}, []
         | Save ->
             let cmd =
                 Option.cons (Option.map (Property.set Toy.name) model.Name.Edit) []
@@ -211,14 +211,14 @@ module ElfEdit =
     let update msg model =
         match msg with
         | Update l -> {model with
-                        Name = Editor.updateProperty Elf.name l model.Name
-                        WorkRate = Editor.updateProperty Elf.workRate l model.WorkRate
+                        Name = Editor.eventUpdate Elf.name l model.Name
+                        WorkRate = Editor.eventUpdate Elf.workRate l model.WorkRate
                         Making = Property.get Elf.making l |> Option.bind id
                         LastEvent = List1.head l |> fst
                       }, []
         | ToyNames m -> {model with ToyNames=m}, []
-        | NameMsg n -> {model with Name=Editor.update n model.Name; SaveMessage=String.empty}, []
-        | WorkRateMsg r -> {model with WorkRate=Editor.update r model.WorkRate; SaveMessage=String.empty}, []
+        | NameMsg n -> {model with Name=Editor.updateAndValidate Elf.name n model.Name; SaveMessage=String.empty}, []
+        | WorkRateMsg r -> {model with WorkRate=Editor.updateAndValidate Elf.workRate r model.WorkRate; SaveMessage=String.empty}, []
         | Save ->
             let cmd =
                 Option.cons (Option.map (Property.set Elf.name) model.Name.Edit) []

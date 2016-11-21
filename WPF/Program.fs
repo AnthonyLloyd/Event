@@ -54,7 +54,7 @@ let main _ =
 
     let openApp title app =
         mainWindow.Dispatcher.Invoke (fun () ->
-            let window = Window(Title=title,Width=400.0)
+            let window = Window(Title=title,Width=400.0,Height=500.0)
             WPF.CreateNaiveUI window |> UI.run app
             window.Show()
         )

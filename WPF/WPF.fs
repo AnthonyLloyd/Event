@@ -2,6 +2,7 @@
 
 open System
 open System.Windows
+open System.Windows.Media
 open System.Windows.Controls
 open Lloyd.Core
 open Lloyd.Core.UI
@@ -15,7 +16,8 @@ let CreateNaiveUI (root:ContentControl) =
             List.iter (function
                 | TextStyle.Bold -> c.FontWeight <- FontWeights.Bold
                 | TextStyle.Width w -> c.Width <- float w
-                | TextStyle.Tooltip s -> c.ToolTip <- s
+                | TextStyle.Tooltip s -> c.ToolTip <- Option.toObj s
+                | TextStyle.Colour f -> c.Foreground <- match f with | Red -> Brushes.Red | Blue -> Brushes.Blue | Green -> Brushes.Green | Black -> Brushes.Black
                 ) style
             upcast c
         | Input (style,text,event) ->
@@ -64,7 +66,15 @@ let CreateNaiveUI (root:ContentControl) =
 
     let updateUI ui (element:UIElement) =
         match ui with
-        | Text (_,text) -> (element :?> TextBlock).Text <- text
+        | Text (style,text) ->
+            let c = element :?> TextBlock
+            c.Text <- text
+            List.iter (function
+                | TextStyle.Bold -> c.FontWeight <- FontWeights.Bold
+                | TextStyle.Width w -> c.Width <- float w
+                | TextStyle.Tooltip s -> c.ToolTip <- Option.toObj s
+                | TextStyle.Colour f -> c.Foreground <- match f with | Red -> Brushes.Red | Blue -> Brushes.Blue | Green -> Brushes.Green | Black -> Brushes.Black
+            ) style
         | Input (_,text,_) -> element :?> TextBox |> updateTextBox text
         | Select (_,options,current,_) ->
             let c = element :?> ComboBox

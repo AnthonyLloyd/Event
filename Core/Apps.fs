@@ -4,19 +4,20 @@ open Lloyd.Core
 open Lloyd.Core.UI
 
 module Editor =
-    type 'a Model = {Label:string; Previous:(EventID * 'a) option; Latest:(EventID * 'a) option; Edit:'a option}
+    type 'a Model = {Label:string; Previous:(EventID * 'a) option; Latest:(EventID * 'a) option; Edit:'a option; Invalid:string option}
 
     let init property =
-        {Label=property.Name+":"; Previous=None; Latest=None; Edit=None}
+        {Label=property.Name+":"; Previous=None; Latest=None; Edit=None; Invalid=None}
 
     type 'a Msg =
         | Edit of 'a option
         | Reset
         | Update of 'a Events
+        | Invalid of string option
 
     let update msg model =
         match msg with
-        | Edit e -> {model with Edit=e}
+        | Edit e -> {model with Edit=if e=Option.map snd model.Latest then None else e}
         | Reset -> {model with Edit=None}
         | Update l ->
             let latest = List1.head l |> mapSnd List1.head |> Some
@@ -25,20 +26,49 @@ module Editor =
                 Latest = latest
                 Edit = if model.Edit=Option.map snd latest then None else model.Edit
             }
+        | Invalid i -> {model with Invalid=i}
 
-    let updateProperty property msg model =
+    let eventUpdate property msg model =
         match Property.tryGetEvents property msg with
         | None -> model
         | Some events -> update (Update events) model
+
+    let validate property model =
+        {model with
+            Invalid =
+                if model.Edit=None then None
+                else match property.Validation model.Edit with
+                     | Ok _ -> None
+                     | Error (_,s) -> Some s}
+
+    let updateAndValidate property msg model =
+        update msg model |> validate property
+
+    let tooltip (model:'a Model) =
+        let versioning =
+            match model.Latest with
+            | None -> None
+            | Some (eid,v) ->
+                let t = sprintf "Current :  %-25s%A" (v :> obj |> string) eid // TODO: How do we do enum like Behaviour
+                match model.Previous with
+                | None -> Some t
+                | Some (eid,v) -> sprintf "%s\nPrevious:  %-25s%A" t (v :> obj |> string) eid |> Some
+        match model.Invalid, versioning with
+        | Some i, Some v -> i+"\n\n"+v |> Some
+        | Some i, None -> Some i
+        | None, Some v -> Some v
+        | None, None -> None
         
+
     let view inputUI model =
         let current = model.Edit |> Option.orTry (Option.map snd model.Latest)
+        let colour = match model.Invalid with | None -> Black | Some _ -> Red
         UI.div [Vertical] [
-            UI.text [Bold] model.Label
+            UI.text [Bold;Tooltip (tooltip model); Colour colour] model.Label
             inputUI current |> UI.map Edit
         ]
 
-    let app inputUI property = UI.appSimple (fun () -> init property) update (view inputUI) // TODO: tooltip, coloured border, rightclick reset
+    let app inputUI property = UI.appSimple (fun () -> init property) update (view inputUI)
 
 
 module EditorSet =

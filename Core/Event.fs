@@ -18,6 +18,7 @@ module User =
 
 type EventID = private | EventID of time:DateTime * user:UserID
                static member Zero = EventID(DateTime.MinValue,User 0)
+               override e.ToString() = match e with | EventID(t,u) -> string t+"   "+User.name u
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module EventID =

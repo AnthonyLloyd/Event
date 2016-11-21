@@ -7,7 +7,8 @@ open Lloyd.Core
 type 'msg Event = ('msg->unit) ref ref
 
 /// Style for a section of UI components.
-type TextStyle = Bold | Width of int | Tooltip of string// TODO: Global control style
+type Colour = Red | Blue | Green | Black
+type TextStyle = Bold | Width of int | Tooltip of string option | Colour of Colour // TODO: Global control style
 type InputStyle = AnyText | Digits | Width of int
 type SelectStyle = Width of int
 type ButtonStyle = Disabled | Width of int
