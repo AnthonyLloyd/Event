@@ -426,14 +426,14 @@ module ElfList =
     let view model =
         let header =
             UI.div [Horizontal] [
-                UI.text [Bold;TextStyle.Width 160] "Elf"
+                UI.text [Bold;TextStyle.Width 180] "Elf"
                 UI.text [Bold;TextStyle.Width 140] "Making"
                 UI.button [ButtonStyle.Width 50] "new" (OpenEdit None)
             ]
         let rowUI row =
             let making = Option.bind (fun tid -> Map.tryFind tid model.ToyNames) row.Making |> Option.getElse String.empty
             UI.div [Horizontal] [
-                UI.text [TextStyle.Width 160] row.Name
+                UI.text [TextStyle.Width 180] row.Name
                 UI.text [TextStyle.Width 140] making
                 UI.button [ButtonStyle.Width 50] "edit" (OpenEdit (Some row.ID))
             ]
