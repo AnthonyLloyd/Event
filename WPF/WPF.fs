@@ -11,10 +11,11 @@ let CreateNaiveUI (root:ContentControl) =
     let rec createUI ui : UIElement =
         match ui with
         | Text (style,text) ->
-            let c = Label(Content=text)
+            let c = TextBlock(Text=text)
             List.iter (function
                 | TextStyle.Bold -> c.FontWeight <- FontWeights.Bold
                 | TextStyle.Width w -> c.Width <- float w
+                | TextStyle.Tooltip s -> c.ToolTip <- s
                 ) style
             upcast c
         | Input (style,text,event) ->
@@ -63,7 +64,7 @@ let CreateNaiveUI (root:ContentControl) =
 
     let updateUI ui (element:UIElement) =
         match ui with
-        | Text (_,text) -> (element :?> Label).Content <- text
+        | Text (_,text) -> (element :?> TextBlock).Text <- text
         | Input (_,text,_) -> element :?> TextBox |> updateTextBox text
         | Select (_,options,current,_) ->
             let c = element :?> ComboBox
