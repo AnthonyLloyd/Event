@@ -69,22 +69,23 @@ module Map =
 
 
 [<SuppressMessage("NameConventions","TypeNamesMustBePascalCase")>]
-type 'a list1 = private NonEmptyList of 'a list
+type 'a list1 = private List1 of 'a list
 
 module List1 =
-    let head (NonEmptyList l) = List.head l
-    let tail (NonEmptyList l) = List.tail l
-    let init x xs = NonEmptyList(x::xs)
+    let head (List1 l) = List.head l
+    let tail (List1 l) = List.tail l
+    let init x xs = List1 (x::xs)
+    let cons x (List1 xs) = List1 (x::xs)
     let tryOfList l = match l with | [] -> None | x::xs -> init x xs |> Some
-    let toList (NonEmptyList l) = l
-    let singleton s = NonEmptyList [s]
-    let map mapper (NonEmptyList l) = List.map mapper l |> NonEmptyList
-    let sort (NonEmptyList l) = List.sort l |> NonEmptyList
-    let fold folder state (NonEmptyList list) = List.fold folder state list
-    let tryPick chooser (NonEmptyList list) = List.tryPick chooser list
-    let tryChoose chooser (NonEmptyList list) =
-        match List.choose chooser list with | [] -> None | l -> NonEmptyList l |> Some
-    let tryCollect mapping (NonEmptyList list) =
+    let toList (List1 l) = l
+    let singleton s = List1 [s]
+    let map mapper (List1 l) = List.map mapper l |> List1
+    let sort (List1 l) = List.sort l |> List1
+    let fold folder state (List1 list) = List.fold folder state list
+    let tryPick chooser (List1 list) = List.tryPick chooser list
+    let tryChoose chooser (List1 list) =
+        match List.choose chooser list with | [] -> None | l -> List1 l |> Some
+    let tryCollect mapping (List1 list) =
         List.choose mapping list |> List.collect toList |> tryOfList
 
 module Observable =

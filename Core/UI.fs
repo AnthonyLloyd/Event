@@ -7,7 +7,7 @@ open Lloyd.Core
 type 'msg Event = ('msg->unit) ref ref
 
 /// Style for a section of UI components.
-type Colour = Red | Blue | Green | Black
+type Colour = Red | Blue | Green | Black | Default
 type Style = Width of int | Height of int | IsEnabled of bool | Bold | Tooltip of string option | TextColour of Colour | Digits | Horizontal | Vertical
 
 /// Primative UI components.
@@ -67,7 +67,7 @@ module UI =
     let inputText text =
         let ev = ref ignore |> ref
         let ui = {UI=Input([],Option.toObj text,ev);Event=ignore}
-        let raise a = String.nonEmpty a |> ui.Event
+        let raise a = Option.ofObj a |> ui.Event
         (!ev):=raise
         ui
 

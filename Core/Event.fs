@@ -17,8 +17,7 @@ module User =
     let name (User userID) = Map.find userID !map
 
 type EventID = private | EventID of time:DateTime * user:UserID
-               static member Zero = EventID(DateTime.MinValue,User 0)
-               override e.ToString() = match e with | EventID(t,u) -> string t+"   "+User.name u
+               override e.ToString() = match e with | EventID(t,u) -> string t + "    " + User.name u
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module EventID =
@@ -43,6 +42,10 @@ module ID =
     let internal gen eventID = Created eventID
 
 type 'Aggregate Events = (EventID * 'Aggregate list1) list1
+
+module Events =
+    let lasteEventID (events:'Aggregate Events) =
+        List1.head events |> fst
 
 [<NoEquality;NoComparison>]
 type 'Aggregate MemoryStore = {Updates: Map<'Aggregate ID,'Aggregate Events>; Observers: IObserver<'Aggregate ID*'Aggregate Events> list}
@@ -153,7 +156,19 @@ module Property =
     let set (property:Property<'a,'b>) v = property.Setter v
     let get (property:Property<'a,'b>) (updates:'a Events) =
         List1.toList updates |> List.tryPick (snd >> List1.tryPick property.Getter)
-    let getAndValidate (property:Property<'a,'b>) (updates:'a Events) =
-        get property updates |> property.Validation
     let tryGetEvents (property:Property<'a,'b>) (update:'a Events) : 'b Events option =
         List1.tryChoose (fun (e,l) -> List1.tryChoose property.Getter l |> Option.map (addFst e)) update
+    let getAndValidate (property:Property<'a,'b>) (updates:'a Events) =
+        get property updates |> property.Validation
+    let validateEdit (view:'a Events -> Result<'b,('a*string) list>) (current:'a Events option) (edits:'a list) =
+        match List1.tryOfList edits with
+        | None -> Error []
+        | Some l ->
+            let update = EventID.gen (User -1), l
+            let proposed =
+                match current with
+                | None -> List1.singleton update
+                | Some events -> List1.cons update events
+            match view proposed with
+            | Ok _ -> Ok ()
+            | Error l -> List.map snd l |> Error

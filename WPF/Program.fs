@@ -47,6 +47,7 @@ let main _ =
         Query.toyProgress kidObservable toyObservable elfObservable
         |> Observable.cacheLast
 
+    WPF.Initialise()
     let contentControl = Controls.ScrollViewer()
     let mainWindow = Window(Title="Santa's Summary",Width=1300.0,Content=contentControl)
 
@@ -59,10 +60,12 @@ let main _ =
             window.Show()
         )
 
-    let saveHandler store createMsg updateMsg ((oid,events),lastEvent) =
+    let saveHandler store createMsg updateMsg (events,(oid,lastEvents)) =
         match oid with
         | None -> Store.create you events store |> createMsg |> Some
-        | Some aid -> Store.update you aid events lastEvent store |> updateMsg |> Some
+        | Some aid ->
+            let lastEventID = Option.get lastEvents |> List1.head |> fst
+            Store.update you aid events lastEventID store |> updateMsg |> Some
 
     let commandHandler cmd =
         match cmd with

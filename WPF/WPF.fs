@@ -7,9 +7,12 @@ open System.Windows.Controls
 open Lloyd.Core
 open Lloyd.Core.UI
 
+let Initialise() =
+    ToolTipService.ShowOnDisabledProperty.OverrideMetadata(typeof<Controls.Button>, FrameworkPropertyMetadata true)
+
 let CreateNaiveUI (root:ContentControl) =
 
-    let setStyle style (e:#FrameworkElement) =
+    let setStyle style (e:FrameworkElement) =
         List.iter (function
             | Width w -> e.Width <- float w
             | Height h -> e.Height <- float h
@@ -21,7 +24,7 @@ let CreateNaiveUI (root:ContentControl) =
     let setStyleText style (e:TextBlock) =
         List.iter (function
             | Bold -> e.FontWeight <- FontWeights.Bold
-            | TextColour f -> e.Foreground <- match f with | Red -> Brushes.Red | Blue -> Brushes.Blue | Green -> Brushes.Green | Black -> Brushes.Black
+            | TextColour f -> e.Foreground <- match f with | Red -> Brushes.Red | Blue -> Brushes.Blue | Green -> Brushes.Green | Black | Default -> Brushes.Black
             | _ -> ()
         ) style
         setStyle style e

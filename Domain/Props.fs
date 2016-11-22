@@ -42,7 +42,7 @@ module Kid =
     let name = Property.create "Name" Kid.Name (function | Kid.Name n -> Some n | _ ->None)
                         (fun s -> match Option.bind String.nonEmpty s with | Some s -> Ok s | None -> Error(Kid.Name "Kid name unknown" ,"Please enter a name"))
     let age = Property.create "Age" Age (function | Age a -> Some a | _ ->None)
-                        (function | Some a when a>=0uy && a<=18uy -> Ok a | _ -> Error(Age 0uy,"Please enter age (0-18)"))
+                        (function | Some a when a>=0uy && a<=16uy -> Ok a | _ -> Error(Age 0uy,"Please enter age (0-16)"))
     let behaviour = Property.create "Behaviour" Behaviour (function | Behaviour b -> Some b | _ ->None)
                         (function | Some b -> Ok b | None -> Error(Behaviour Good,"Please enter behaviour"))
     let wishList = Property.create "Wish List" WishList (function |WishList w -> Some w |_->None)
@@ -50,7 +50,7 @@ module Kid =
 
     type Summary = {Name:string; Age:Age; Behaviour:Behaviour; WishList:Toy ID Set}
 
-    let summary events =
+    let view events =
         Ok  (fun n a b w -> {Name=n; Age=a; Behaviour=b; WishList=w})
         <*> Property.getAndValidate name events
         <*> Property.getAndValidate age events
