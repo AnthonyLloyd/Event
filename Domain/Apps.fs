@@ -110,7 +110,7 @@ module KidEdit =
                                                     Map.tryFind toy model.ToyNames |> Option.map (addFst toy)
                                                   else None ) model.Age.Current)
         let isEnabled = Result.isOk model.SaveValidation |> IsEnabled
-        let tooltip = match model.SaveValidation with | Ok () -> None | Error l -> System.String.Join("\n", l) |> Some
+        let tooltip = match model.SaveValidation with | Ok () | Error [] -> None | Error l -> List.rev l |> String.join "\n" |> Some
         UI.div [Vertical] [
             Editor.view UI.inputText model.Name |> UI.map NameMsg
             Editor.view UI.inputDigits model.Age |> UI.map AgeMsg
@@ -194,7 +194,7 @@ module ToyEdit =
 
     let view model =
         let isEnabled = Result.isOk model.SaveValidation |> IsEnabled
-        let tooltip = match model.SaveValidation with | Ok () -> None | Error l -> System.String.Join("\n", l) |> Some
+        let tooltip = match model.SaveValidation with | Ok () | Error [] -> None | Error l -> List.rev l |> String.join "\n" |> Some
         UI.div [Vertical] [
             Editor.view UI.inputText model.Name |> UI.map NameMsg
             Editor.view UI.inputRange model.AgeRange |> UI.map AgeRangeMsg
@@ -280,7 +280,7 @@ module ElfEdit =
     let view model =
         let making = Option.bind (fun tid -> Map.tryFind tid model.ToyNames) model.Making |> Option.getElse "Nothing"
         let isEnabled = Result.isOk model.SaveValidation |> IsEnabled
-        let tooltip = match model.SaveValidation with | Ok () -> None | Error l -> System.String.Join("\n", l) |> Some
+        let tooltip = match model.SaveValidation with | Ok () | Error [] -> None | Error l -> List.rev l |> String.join "\n" |> Some
         UI.div [Vertical] [
             Editor.view UI.inputText model.Name |> UI.map NameMsg
             Editor.view UI.inputDigits model.WorkRate |> UI.map WorkRateMsg

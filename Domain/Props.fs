@@ -8,7 +8,7 @@ module Toy =
     let name = Property.create "Name" Toy.Name (function | Toy.Name n -> Some n | _ -> None)
                         (fun s -> match Option.bind String.nonEmpty s with | Some s -> Ok s | None -> Error(Toy.Name "Toy name unknown" ,"Please enter a name"))
     let ageRange = Property.create "Age Range" AgeRange (function | AgeRange (l,h) -> Some (l,h) | _ -> None)
-                        (function | Some(l,h) when l>=h && l>=0uy && h<=16uy -> Ok(l,h) | _ -> Error(AgeRange(0uy,0uy),"Please enter an age range (0-16)"))
+                        (function | Some(l,h) when l<=h && l>=0uy && h<=16uy -> Ok(l,h) | _ -> Error(AgeRange(0uy,0uy),"Please enter an age range (0-16)"))
     let workRequired = Property.create "Work Required" WorkRequired (function | WorkRequired c -> Some c | _ -> None)
                         (function | Some w -> Ok w | None -> Error(WorkRequired 0us,"Please enter work required"))
 

@@ -29,6 +29,7 @@ module Result =
 
 module String =
     let empty = String.Empty
+    let join s (l:string seq) = String.Join(s,l)
     let nonEmpty s = if String.IsNullOrWhiteSpace s then None else s.Trim() |> Some
     let inline tryParse (s:string) =
         let mutable r = Unchecked.defaultof<_>
