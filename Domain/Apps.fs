@@ -20,6 +20,7 @@ module KidEdit =
         WishList: Toy ID EditorSet.Model
         LastEvent: EventID
         ToyNames: Map<Toy ID,string>
+        ToyAgeRange: Map<Toy ID,Age*Age>
         SaveMessage: string
     }
 
@@ -32,11 +33,13 @@ module KidEdit =
             WishList=EditorSet.init Kid.wishList
             LastEvent=EventID.Zero
             ToyNames=Map.empty
+            ToyAgeRange=Map.empty
             SaveMessage=String.empty}, []
 
     type Msg =
         | Update of Kid Events
         | ToyNames of Map<Toy ID,string>
+        | ToyAgeRanges of Map<Toy ID,Age*Age>
         | NameMsg of string Editor.Msg
         | AgeMsg of Age Editor.Msg
         | BehaviourMsg of Behaviour Editor.Msg
@@ -55,6 +58,7 @@ module KidEdit =
                         LastEvent = List1.head l |> fst
                       }, []
         | ToyNames m -> {model with ToyNames=m}, []
+        | ToyAgeRanges m -> {model with ToyAgeRange=m}, []
         | NameMsg n -> {model with Name=Editor.updateAndValidate Kid.name n model.Name; SaveMessage=String.empty}, []
         | AgeMsg r -> {model with Age=Editor.updateAndValidate Kid.age r model.Age; SaveMessage=String.empty}, []
         | BehaviourMsg c -> {model with Behaviour=Editor.updateAndValidate Kid.behaviour c model.Behaviour; SaveMessage=String.empty}, []
@@ -83,18 +87,25 @@ module KidEdit =
     type Sub =
         | Kid of Kid ID
         | ToyName
+        | ToyAgeRange
 
     let subscription kidEvents toyEvents model =
-        [(ToyName, Query.toyNames toyEvents |> Observable.map ToyNames)]
+        [
+            ToyName, Query.toyNames toyEvents |> Observable.map ToyNames
+            ToyAgeRange, Query.toyAgeRanges toyEvents |> Observable.map ToyAgeRanges
+        ]
         |> Option.cons (Option.map (fun tid -> Kid tid, Observable.choose (fun (i,e) -> if i=tid then Some e else None) kidEvents |> Observable.map Update) model.ID)
         |> Map.ofList
 
     let view model =
+        let toyNames =
+            Map.toList model.ToyAgeRange
+            |> List.choose (fun (toy,(lo,hi)) -> Option.bind (fun a -> if between lo hi a then Map.tryFind toy model.ToyNames |> Option.map (addFst toy) else None) model.Age.Current)
         UI.div [Vertical] [
             Editor.view UI.inputText model.Name |> UI.map NameMsg
             Editor.view UI.inputDigits model.Age |> UI.map AgeMsg
             Editor.view (UI.select [] [Bad,"Bad";Mixed,"Mixed";Good,"Good"]) model.Behaviour |> UI.map BehaviourMsg
-            EditorSet.view (fun style current -> UI.select style (Map.toList model.ToyNames) current) model.WishList |> UI.map WishListMsg
+            EditorSet.view (fun style current -> UI.select style toyNames current) model.WishList |> UI.map WishListMsg
             UI.div [Horizontal] [UI.button [] "Save" Save; UI.text [] model.SaveMessage]
         ]
 
@@ -303,17 +314,17 @@ module KidList =
     let view model =
         let header =
             UI.div [Horizontal] [
-                UI.text [Bold;TextStyle.Width 150] "Kid"
-                UI.text [Bold;TextStyle.Width 70] "Requested"
-                UI.text [Bold;TextStyle.Width 70] "Finished"
-                UI.button [ButtonStyle.Width 50] "new" (OpenEdit None)
+                UI.text [Bold; Width 150] "Kid"
+                UI.text [Bold; Width 70] "Requested"
+                UI.text [Bold; Width 70] "Finished"
+                UI.button [Width 50] "new" (OpenEdit None)
             ]
         let rowUI row =
             UI.div [Horizontal] [
-                UI.text [TextStyle.Width 150] row.Name
-                UI.text [TextStyle.Width 70] (string row.Requested)
-                UI.text [TextStyle.Width 70] (string row.Finished)
-                UI.button [ButtonStyle.Width 50] "edit" (OpenEdit (Some row.ID))
+                UI.text [Width 150] row.Name
+                UI.text [Width 70] (string row.Requested)
+                UI.text [Width 70] (string row.Finished)
+                UI.button [Width 50] "edit" (OpenEdit (Some row.ID))
             ]
         header::List.map rowUI model |> UI.div [Vertical;Width 400]
 
@@ -369,17 +380,17 @@ module ToyList =
     let view model =
         let header =
             UI.div [Horizontal] [
-                UI.text [Bold;TextStyle.Width 150] "Toy"
-                UI.text [Bold;TextStyle.Width 70] "Requested"
-                UI.text [Bold;TextStyle.Width 70] "Finished"
-                UI.button [ButtonStyle.Width 50] "new" (OpenEdit None)
+                UI.text [Bold; Width 150] "Toy"
+                UI.text [Bold; Width 70] "Requested"
+                UI.text [Bold; Width 70] "Finished"
+                UI.button [Width 50] "new" (OpenEdit None)
             ]
         let rowUI row =
             UI.div [Horizontal] [
-                UI.text [TextStyle.Width 150] row.Name
-                UI.text [TextStyle.Width 70] (string row.Requested)
-                UI.text [TextStyle.Width 70] (string row.Finished)
-                UI.button [ButtonStyle.Width 50] "edit" (OpenEdit (Some row.ID))
+                UI.text [Width 150] row.Name
+                UI.text [Width 70] (string row.Requested)
+                UI.text [Width 70] (string row.Finished)
+                UI.button [Width 50] "edit" (OpenEdit (Some row.ID))
             ]
         header::List.map rowUI model |> UI.div [Vertical;Width 400]
 
@@ -426,16 +437,16 @@ module ElfList =
     let view model =
         let header =
             UI.div [Horizontal] [
-                UI.text [Bold;TextStyle.Width 180] "Elf"
-                UI.text [Bold;TextStyle.Width 140] "Making"
-                UI.button [ButtonStyle.Width 50] "new" (OpenEdit None)
+                UI.text [Bold; Width 180] "Elf"
+                UI.text [Bold; Width 140] "Making"
+                UI.button [Width 50] "new" (OpenEdit None)
             ]
         let rowUI row =
             let making = Option.bind (fun tid -> Map.tryFind tid model.ToyNames) row.Making |> Option.getElse String.empty
             UI.div [Horizontal] [
-                UI.text [TextStyle.Width 180] row.Name
-                UI.text [TextStyle.Width 140] making
-                UI.button [ButtonStyle.Width 50] "edit" (OpenEdit (Some row.ID))
+                UI.text [Width 180] row.Name
+                UI.text [Width 140] making
+                UI.button [Width 50] "edit" (OpenEdit (Some row.ID))
             ]
         header::List.map rowUI model.Rows |> UI.div [Vertical;Width 400]
 

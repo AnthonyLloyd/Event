@@ -8,20 +8,16 @@ type 'msg Event = ('msg->unit) ref ref
 
 /// Style for a section of UI components.
 type Colour = Red | Blue | Green | Black
-type TextStyle = Bold | Width of int | Tooltip of string option | Colour of Colour // TODO: Global control style
-type InputStyle = AnyText | Digits | Width of int
-type SelectStyle = Width of int
-type ButtonStyle = Disabled | Width of int
-type DivStyle = Horizontal | Vertical | Width of int
+type Style = Width of int | Height of int | IsEnabled of bool | Bold | Tooltip of string option | TextColour of Colour | Digits | Horizontal | Vertical
 
 /// Primative UI components.
 [<NoEquality;NoComparison>]
 type UI =
-    | Text of TextStyle list * string
-    | Input of InputStyle list * string * string Event
-    | Select of SelectStyle list * string list * int option * int option Event
-    | Button of ButtonStyle list * string * unit Event
-    | Div of DivStyle list * UI list
+    | Text of Style list * string
+    | Input of Style list * string * string Event
+    | Select of Style list * string list * int option * int option Event
+    | Button of Style list * string * unit Event
+    | Div of Style list * UI list
 
 /// UI component update and event redirection.
 [<NoEquality;NoComparison>]
@@ -70,7 +66,7 @@ module UI =
     /// Returns a text Input UI component.
     let inputText text =
         let ev = ref ignore |> ref
-        let ui = {UI=Input([AnyText],Option.toObj text,ev);Event=ignore}
+        let ui = {UI=Input([],Option.toObj text,ev);Event=ignore}
         let raise a = String.nonEmpty a |> ui.Event
         (!ev):=raise
         ui

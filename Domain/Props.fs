@@ -6,7 +6,7 @@ open Lloyd.Core
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module Toy =
     let name = Property.create "Name" Toy.Name (function | Toy.Name n -> Some n | _ -> None)
-                        (fun s -> match Option.bind String.nonEmpty s with | Some s -> Ok s | None -> Error(Toy.Name "Toy name unknown" ,"Toy name missing"))
+                        (fun s -> match Option.bind String.nonEmpty s with | Some s -> Ok s | None -> Error(Toy.Name "Toy name unknown" ,"Please enter a name"))
     let ageRange = Property.create "Age Range" AgeRange (function | AgeRange (l,h) -> Some (l,h) | _ -> None)
                         (function | Some(l,h) when l>=h && l>=0uy && h<=16uy -> Ok(l,h) | _ -> Error(AgeRange(0uy,0uy),"Please enter an age range (0-16)"))
     let workRequired = Property.create "Work Required" WorkRequired (function | WorkRequired c -> Some c | _ -> None)
@@ -23,7 +23,7 @@ module Toy =
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module Elf =
     let name = Property.create "Name" Elf.Name (function | Elf.Name n -> Some n | _->None)
-                        (fun s -> match Option.bind String.nonEmpty s with | Some s -> Ok s | None -> Error(Elf.Name "Elf name unknown" ,"Elf name missing"))
+                        (fun s -> match Option.bind String.nonEmpty s with | Some s -> Ok s | None -> Error(Elf.Name "Elf name unknown" ,"Please enter a name"))
     let workRate = Property.create "Work Rate" WorkRate (function | WorkRate r -> Some r | _ ->None)
                         (function | Some w -> Ok w | None -> Error(WorkRate 0us,"Please enter work rate"))
     let making = Property.create "Making" Making (function |Making t -> Some t | _ ->None)
@@ -40,7 +40,7 @@ module Elf =
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module Kid =
     let name = Property.create "Name" Kid.Name (function | Kid.Name n -> Some n | _ ->None)
-                        (fun s -> match Option.bind String.nonEmpty s with | Some s -> Ok s | None -> Error(Kid.Name "Kid name unknown" ,"Kid name missing"))
+                        (fun s -> match Option.bind String.nonEmpty s with | Some s -> Ok s | None -> Error(Kid.Name "Kid name unknown" ,"Please enter a name"))
     let age = Property.create "Age" Age (function | Age a -> Some a | _ ->None)
                         (function | Some a when a>=0uy && a<=18uy -> Ok a | _ -> Error(Age 0uy,"Please enter age (0-18)"))
     let behaviour = Property.create "Behaviour" Behaviour (function | Behaviour b -> Some b | _ ->None)
@@ -106,6 +106,10 @@ module Query =
     let toyNames (toyEvents:IObservable<Toy ID * Toy Events>) =
         toyName toyEvents
         |> Observable.scan (fun m (toy,name) -> Map.add toy name m) Map.empty
+
+    let toyAgeRanges (toyEvents:IObservable<Toy ID * Toy Events>) =
+        toyAgeRange toyEvents
+        |> Observable.scan (fun m (toy,ageRange) -> Map.add toy ageRange m) Map.empty
 
     let toyProgress kidEvents toyEvents elfEvents =
 

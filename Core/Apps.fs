@@ -5,6 +5,7 @@ open Lloyd.Core.UI
 
 module Editor =
     type 'a Model = {Label:string; Previous:(EventID * 'a) option; Latest:(EventID * 'a) option; Edit:'a option; Invalid:string option}
+                    member m.Current = m.Edit |> Option.orTry (Option.map snd m.Latest)
 
     let init property =
         {Label=property.Name+":"; Previous=None; Latest=None; Edit=None; Invalid=None}
@@ -64,7 +65,7 @@ module Editor =
         let current = model.Edit |> Option.orTry (Option.map snd model.Latest)
         let colour = match model.Invalid with | None -> Black | Some _ -> Red
         UI.div [Vertical] [
-            UI.text [Bold;Tooltip (tooltip model); Colour colour] model.Label
+            UI.text [Bold;Tooltip (tooltip model); TextColour colour] model.Label
             inputUI current |> UI.map Edit
         ]
 
@@ -106,7 +107,7 @@ module EditorSet =
         | Some events -> update (Update events) model
 
     let view inputUI model =
-        let header = UI.div [Horizontal] [UI.text [Bold;TextStyle.Width 150] model.Label ; UI.button [ButtonStyle.Width 20] "+" Insert]
-        let item i a = UI.div [Horizontal] [inputUI [SelectStyle.Width 150] a |> UI.map (fun v -> Modify(i,v)); UI.button [ButtonStyle.Width 20] "-" (Remove i)]
+        let header = UI.div [Horizontal] [UI.text [Bold; Width 150] model.Label ; UI.button [Width 20] "+" Insert]
+        let item i a = UI.div [Horizontal] [inputUI [Width 150] a |> UI.map (fun v -> Modify(i,v)); UI.button [Width 20] "-" (Remove i)]
         let items = current model |> List.mapi item
         header::items |> UI.div [Vertical]
