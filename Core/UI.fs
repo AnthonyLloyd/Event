@@ -161,29 +161,46 @@ module UI =
 
     let private remapEvents l = List.iter (function | EventUI f -> f() | _-> ()) l
 
+    type private 'a UIMsg =
+        | Msg of 'a
+        | Raise
+        | Dispose
+
     /// Runs a UI application given a native UI.
     let run (app:App<'msg,'model,'sub,'cmd>) (nativeUI:INativeUI) =
-        MailboxProcessor.Start(fun mb ->
-            let rec loop model ui subs =
-                async {
-                    let! msg = mb.Receive()
-                    let model,cmd = app.Update msg model
-                    let newSubs = app.Subscription model
-                    subs |> Map.iter (fun k d -> if Map.containsKey k newSubs |> not then (d:IDisposable).Dispose())
-                    let subs = Map.map (fun k sub -> match Map.tryFind k subs with |Some d -> d |None-> Observable.subscribe mb.Post sub) newSubs
-                    List.iter (app.Handler >> Option.iter mb.Post) cmd
-                    let newUI = app.View model
-                    newUI.Event<-mb.Post
-                    let diff = diff ui newUI
-                    remapEvents diff
-                    nativeUI.Send diff
-                    return! loop model newUI subs
-                }
-            let model,cmd = app.Init() //TODO Should this be async, can it be done in the async loop
-            let subs = app.Subscription model |> Map.map (fun _ -> Observable.subscribe mb.Post)
-            List.iter (app.Handler >> Option.iter mb.Post) cmd
-            let ui = app.View model
-            ui.Event<-mb.Post
-            nativeUI.Send [InsertUI([],ui.UI)]
-            loop model ui subs
-        ) |> ignore //TODO Should be IDisposable?
+        let mailbox =
+            MailboxProcessor.Start(fun mb ->
+                let rec loop model ui subs toRaise raiseCount =
+                    async {
+                        let! msg = mb.Receive()
+                        match msg with
+                        | Msg msg ->
+                            let model,cmd = app.Update msg model
+                            let newSubs = app.Subscription model
+                            subs |> Map.iter (fun k d -> if Map.containsKey k newSubs |> not then (d:IDisposable).Dispose())
+                            let subs = Map.map (fun k sub -> match Map.tryFind k subs with |Some d -> d |None-> Observable.subscribe (Msg >> mb.Post) sub) newSubs
+                            List.iter (app.Handler >> Option.iter (Msg >> mb.Post)) cmd
+                            let newUI = app.View model
+                            newUI.Event <- Msg >> mb.Post
+                            let diff = diff ui newUI
+                            remapEvents diff
+                            let toRaise = diff::toRaise
+                            mb.Post Raise
+                            return! loop model newUI subs toRaise (raiseCount+1)
+                        | Raise ->
+                            let toRaise =
+                                if raiseCount<>1 then toRaise
+                                else List.rev toRaise |> List.iter nativeUI.Send; []
+                            return! loop model ui subs toRaise (raiseCount-1)
+                        | Dispose ->
+                            subs |> Map.iter (fun _ d -> d.Dispose())
+                    }
+                let model,cmd = app.Init() //TODO Should this be async, can it be done in the async loop
+                let subs = app.Subscription model |> Map.map (fun _ -> Observable.subscribe (Msg >> mb.Post))
+                List.iter (app.Handler >> Option.iter (Msg >> mb.Post)) cmd
+                let ui = app.View model
+                ui.Event <- Msg >> mb.Post
+                nativeUI.Send [InsertUI([],ui.UI)]
+                loop model ui subs [] 0
+            )
+        {new IDisposable with member __.Dispose() = mailbox.Post Dispose}

@@ -56,8 +56,9 @@ let main _ =
     let openApp title app =
         mainWindow.Dispatcher.Invoke (fun () ->
             let window = Window(Title=title,Width=400.0,Height=500.0)
-            WPF.CreateNaiveUI window |> UI.run app
+            let ui = WPF.CreateNaiveUI window |> UI.run app
             window.Show()
+            window.Closing.Add (fun _ -> ui.Dispose())
         )
 
     let saveHandler store createMsg updateMsg (events,(oid,lastEvents)) =
@@ -80,7 +81,7 @@ let main _ =
     
     use santa = Procs.santaRun toyStore elfStore toyProgressObservable
 
-    WPF.CreateNaiveUI contentControl |> UI.run app
+    use ui = WPF.CreateNaiveUI contentControl |> UI.run app
 
     Application().Run(mainWindow) |> ignore
     
