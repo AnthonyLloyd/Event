@@ -67,18 +67,34 @@ module Editor =
 
 
 module EditorSet =
-    type Model<'a when 'a : comparison> = {Label:string; Previous:(EventID * 'a Set) option; Latest:(EventID * 'a Set) option; Edit:'a option list option}
+
+    type Model<'a when 'a : comparison> = {
+        Label: string
+        Previous: (EventID * 'a Set) option
+        Latest: (EventID * 'a Set) option
+        Edit: 'a option list option
+        Order: Map<'a,string>
+    }
 
     let init property =
-        {Label=property.Name+":"; Previous=None; Latest=None; Edit=None}
+        {
+            Label = property.Name+":"
+            Previous = None
+            Latest = None
+            Edit = None
+            Order = Map.empty
+        }
 
-    type 'a Msg =
+    type Msg<'a when 'a : comparison> =
         | Insert
         | Remove of int
         | Modify of int * 'a option
         | Update of 'a SetEvent Events
+        | Order of Map<'a,string>
 
-    let current model = model.Edit |> Option.orTry (Option.map (snd >> Set.toList >> List.map Some) model.Latest) |> Option.getElse [] // TODO: new to sort latest
+    let current model =
+        let latest() = Option.map (snd >> Set.toList >> List.sortBy (flip Map.tryFind model.Order) >> List.map Some) model.Latest
+        model.Edit |> Option.orTryFun latest |> Option.getElse []
 
     let update msg model =
         match msg with
@@ -94,6 +110,7 @@ module EditorSet =
                         | Some l when List.forall Option.isSome l && List.map Option.get l |> Set.ofList = latest -> None
                         | _ -> model.Edit
             }
+        | Order m -> {model with Order=m}
 
     let updateProperty property msg model =
         match Property.tryGetEvents property msg with

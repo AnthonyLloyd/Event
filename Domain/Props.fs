@@ -103,7 +103,7 @@ module Query =
         toDelta toyEvents
         |> Observable.choose (fun (toy,events) -> Property.get Toy.ageRange events |> Option.map (addFst toy))
 
-    let toyNames (toyEvents:IObservable<Toy ID * Toy Events>) =
+    let toyNames (toyEvents:IObservable<Toy ID * Toy Events>) = // TODO: These fire events as the build up, need only latest and updates
         toyName toyEvents
         |> Observable.scan (fun m (toy,name) -> Map.add toy name m) Map.empty
 

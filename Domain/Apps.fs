@@ -72,7 +72,7 @@ module KidEdit =
                             Behaviour = Editor.eventUpdate Kid.behaviour l model.Behaviour
                             WishList = EditorSet.updateProperty Kid.wishList l model.WishList
                           }, []
-            | ToyNames m -> {model with ToyNames=m}, []
+            | ToyNames m -> {model with ToyNames=m; WishList=EditorSet.update (EditorSet.Order m) model.WishList}, []
             | ToyAgeRanges m -> {model with ToyAgeRange=m}, []
             | NameMsg n -> {model with Name=Editor.updateAndValidate Kid.name n model.Name; SaveResponse=String.empty}, []
             | AgeMsg r -> {model with Age=Editor.updateAndValidate Kid.age r model.Age; SaveResponse=String.empty}, []

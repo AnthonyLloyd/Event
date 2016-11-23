@@ -36,9 +36,10 @@ module String =
         if (^a : (static member TryParse: string * ^a byref -> bool) (s, &r)) then Some r else None
 
 module Option =
-    let getElse v o = match o with | Some i -> i | None -> v
-    let getElseFun f o = match o with | Some i -> i | None -> f()
+    let getElse v o = match o with | None -> v | Some i -> i
+    let getElseFun f o = match o with | None -> f() | Some i -> i
     let orTry a o = match o with | None -> a | _ -> o
+    let orTryFun f o = match o with | None -> f() | _ -> o
     let cons x xs = match x with | None -> xs | Some x -> x::xs
     type OptionBuilder() =
         member __.Bind(v,f) = Option.bind f v
