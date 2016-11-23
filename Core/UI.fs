@@ -168,7 +168,7 @@ module UI =
 
     /// Runs a UI application given a native UI.
     let run (app:App<'msg,'model,'sub,'cmd>) (nativeUI:INativeUI) =
-        let mailbox =
+        let mb =
             MailboxProcessor.Start(fun mb ->
                 let rec loop model ui subs toRaise raiseCount =
                     async {
@@ -190,17 +190,17 @@ module UI =
                         | Raise ->
                             let toRaise =
                                 if raiseCount<>1 then toRaise
-                                else List.rev toRaise |> List.iter nativeUI.Send; []
+                                else List.rev toRaise |> List.concat |> nativeUI.Send; []
                             return! loop model ui subs toRaise (raiseCount-1)
                         | Dispose ->
                             subs |> Map.iter (fun _ d -> d.Dispose())
                     }
-                let model,cmd = app.Init() //TODO Should this be async, can it be done in the async loop
-                let subs = app.Subscription model |> Map.map (fun _ -> Observable.subscribe (Msg >> mb.Post))
+                let model,cmd = app.Init()
                 List.iter (app.Handler >> Option.iter (Msg >> mb.Post)) cmd
+                let subs = app.Subscription model |> Map.map (fun _ -> Observable.subscribe (Msg >> mb.Post))
+                mb.Post Raise
                 let ui = app.View model
                 ui.Event <- Msg >> mb.Post
-                nativeUI.Send [InsertUI([],ui.UI)]
-                loop model ui subs [] 0
+                loop model ui subs [[InsertUI([],ui.UI)]] 1
             )
-        {new IDisposable with member __.Dispose() = mailbox.Post Dispose}
+        {new IDisposable with member __.Dispose() = mb.Post Dispose}

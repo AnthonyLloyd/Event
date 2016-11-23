@@ -78,7 +78,7 @@ module EditorSet =
         | Modify of int * 'a option
         | Update of 'a SetEvent Events
 
-    let current model = model.Edit |> Option.orTry (Option.map (snd >> Set.toList >> List.map Some) model.Latest) |> Option.getElse []
+    let current model = model.Edit |> Option.orTry (Option.map (snd >> Set.toList >> List.map Some) model.Latest) |> Option.getElse [] // TODO: new to sort latest
 
     let update msg model =
         match msg with

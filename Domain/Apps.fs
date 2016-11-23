@@ -53,7 +53,7 @@ module KidEdit =
         | UpdateResult of Result<unit,Store.Error>
 
     let update msg model =
-        let edits model =
+        let edits model = // TODO: deleteing a field doesn't raise the validation
             model.WishList.Edit
             |> Option.map (fun e ->
                 let before = model.WishList.Latest |> Option.map snd |> Option.getElse Set.empty
