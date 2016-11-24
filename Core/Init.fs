@@ -71,6 +71,7 @@ module Map =
 
 
 [<SuppressMessage("NameConventions","TypeNamesMustBePascalCase")>]
+/// A non-empty list
 type 'a list1 = private List1 of 'a list
 
 module List1 =
@@ -203,6 +204,12 @@ module Common =
             if Option.isNone oldNextTime then check() |> Async.Start
     let memoize f =
         let d = Collections.Generic.Dictionary(HashIdentity.Structural)
+        fun a ->
+            let t,b = d.TryGetValue a
+            if t then b
+            else let b = f a in d.Add(a,b); b
+    let memoizeWeak f =
+        let d = System.Runtime.CompilerServices.ConditionalWeakTable<_,_>()
         fun a ->
             let t,b = d.TryGetValue a
             if t then b

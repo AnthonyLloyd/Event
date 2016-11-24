@@ -76,16 +76,33 @@ let CreateNaiveUI (root:ContentControl) =
             List.iter (c.Children.Add>>ignore) children
             upcast c
 
+    let updateTextBlock =
+        let reset (tb:TextBlock) (c,w) =
+            root.Dispatcher.Invoke (fun () ->
+                tb.Foreground <- c
+                tb.FontWeight <- w
+            )
+        let resetDeferred = memoizeWeak (fun tb -> deferred (reset tb) (TimeSpan.FromMilliseconds 2000.0))
+        fun (tb:TextBlock) (t:string) ->
+            if String.IsNullOrEmpty tb.Text |> not
+            && String.IsNullOrEmpty t |> not
+            && tb.Text<>t
+            && tb.Foreground <> (Brushes.Green :> Brush) then
+                let before = tb.Foreground,tb.FontWeight
+                tb.Foreground <- Brushes.Green
+                tb.FontWeight <- FontWeights.Bold
+                resetDeferred tb before
+            tb.Text <- t
+
     let updateTextBox =
         let update (tb:TextBox) t = root.Dispatcher.Invoke (fun () -> if tb.Text<>t then tb.Text<-t)
-        fun tb -> deferred (update tb) (TimeSpan.FromMilliseconds 200.0)
-        |> memoize |> flip
+        memoizeWeak (fun tb -> deferred (update tb) (TimeSpan.FromMilliseconds 200.0)) |> flip
 
     let updateUI ui (element:UIElement) =
         match ui with
         | Text (style,text) ->
             let c = element :?> TextBlock
-            c.Text <- text
+            updateTextBlock c text
             setStyleText style c
         | Input (style,text,_) ->
             let c = element :?> TextBox

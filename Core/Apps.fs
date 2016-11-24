@@ -29,23 +29,12 @@ module Editor =
             }
         | Invalid i -> {model with Invalid=i}
 
-    let eventUpdate property msg model =
-        match Property.tryGetEvents property msg with
-        | None -> model
-        | Some events -> update (Update events) model
-
-    let validate property model =
-        {model with Invalid = Option.bind (fun e -> match property.Validation e with | Ok _ -> None | Error (_,s) -> Some s) model.Edit}
-
-    let updateAndValidate property msg model =
-        update msg model |> validate property
-
     let tooltip (model:'a Model) =
         let versioning =
             match model.Latest with
             | None -> None
             | Some (eid,v) ->
-                let t = sprintf "Current :  %-25s%A" (v :> obj |> string) eid // TODO: How do we do enum like Behaviour
+                let t = sprintf "Latest  :  %-25s%A" (v :> obj |> string) eid // TODO: How do we do enum like Behaviour
                 match model.Previous with
                 | None -> Some t
                 | Some (eid,v) -> sprintf "%s\nPrevious:  %-25s%A" t (v :> obj |> string) eid |> Some
@@ -65,6 +54,21 @@ module Editor =
 
     let app inputUI property = UI.appSimple (fun () -> init property) update (view inputUI)
 
+    let eventUpdate property msg model =
+        match Property.tryGetEvents property msg with
+        | None -> model
+        | Some events -> update (Update events) model
+
+    let validate property model =
+        {model with Invalid = Option.bind (fun e -> match property.Validation e with | Ok _ -> None | Error (_,s) -> Some s) model.Edit}
+
+    let updateAndValidate property msg model =
+        update msg model |> validate property
+
+    let edit property model =
+        match model.Edit with
+        | Some (Some b) -> Property.set property b |> Some
+        | _ -> None
 
 module EditorSet =
 
@@ -112,13 +116,20 @@ module EditorSet =
             }
         | Order m -> {model with Order=m}
 
-    let updateProperty property msg model =
-        match Property.tryGetEvents property msg with
-        | None -> model
-        | Some events -> update (Update events) model
-
     let view inputUI model =
         let header = UI.div [Horizontal] [UI.text [Bold; Width 150] model.Label ; UI.button [Width 20] "+" Insert]
         let item i a = UI.div [Horizontal] [inputUI [Width 150] a |> UI.map (fun v -> Modify(i,v)); UI.button [Width 20] "-" (Remove i)]
         let items = current model |> List.mapi item
         header::items |> UI.div [Vertical]
+
+    let updateProperty property msg model =
+        match Property.tryGetEvents property msg with
+        | None -> model
+        | Some events -> update (Update events) model
+
+    let edit (property:Property<'a,'b SetEvent>) (model:'b Model) =
+        match model.Edit with
+        | Some l ->
+            let before = model.Latest |> Option.map snd |> Option.getElse Set.empty
+            List.choose id l |> Set.ofList |> SetEvent.difference before |> List.map (Property.set property)
+        | None -> []

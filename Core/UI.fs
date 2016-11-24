@@ -71,9 +71,9 @@ module UI =
         (!ev):=raise
         ui
 
-    let inline inputDigits (digits:'a option) : 'a option UI =
+    let inline inputDigits style (digits:'a option) : 'a option UI =
         let ev = ref ignore |> ref
-        let ui = {UI=Input([Digits],Option.map string digits |> Option.toObj,ev);Event=ignore}
+        let ui = {UI=Input(Digits::style,Option.map string digits |> Option.toObj,ev);Event=ignore}
         let raise a = String.tryParse a |> ui.Event
         (!ev):=raise
         ui
@@ -118,9 +118,9 @@ module UI =
         let range() = match lo,hi with | Some l,Some h -> Some (l,h) |_ -> None
         let ui =
             div [Horizontal] [
-                inputDigits lo |> map Choice1Of2
+                inputDigits [Width 30] lo |> map Choice1Of2
                 text [] " - "
-                inputDigits hi |> map Choice2Of2
+                inputDigits [Width 30] hi |> map Choice2Of2
             ]
         let ui2 = {UI=ui.UI;Event=ignore}
         let raise e =
@@ -147,9 +147,6 @@ module UI =
             | Div (_,[]),Div (_,[]) -> diffs
             | Div (_,[]),Div (_,l) -> List.fold (fun (i,diffs) ui -> i+1,InsertUI(i::path,ui)::diffs) (index,diffs) l |> snd |> List.rev
             | Div (_,l),Div (_,[]) -> List.fold (fun (i,diffs) _ -> i+1,RemoveUI(i::path)::diffs) (index,diffs) l |> snd
-            | Div (l,(h1::t1)),Div (_,(h2::t2)) when LanguagePrimitives.PhysicalEquality h1 h2 -> diff (Div(l,t1)) (Div(l,t2)) path (index+1) diffs
-            | Div (l,(h1::t1)),Div (_,(h2::h3::t2)) when LanguagePrimitives.PhysicalEquality h1 h3 -> diff (Div(l,t1)) (Div(l,t2)) path (index+1) (InsertUI(index::path,h2)::diffs)
-            | Div (l,(_::h2::t1)),Div (_,(h3::t2)) when LanguagePrimitives.PhysicalEquality h2 h3 -> diff (Div(l,t1)) (Div(l,t2)) path (index+1) (RemoveUI(index::path)::diffs)
             | Div (l,(h1::t1)),Div (_,(h2::t2)) -> diff h1 h2 (index::path) 0 diffs |> diff (Div(l,t1)) (Div(l,t2)) path (index+1)
             | _,_ -> ReplaceUI(path,ui2)::diffs
         diff ui1.UI ui2.UI [] 0 []

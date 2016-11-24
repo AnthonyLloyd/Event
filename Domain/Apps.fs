@@ -14,23 +14,29 @@ type Cmd =
 
 module KidEdit =
 
-    type Model = {
-        ID: Kid ID option
-        Current: Kid Events option
-        Name: string Editor.Model
-        Age: Age Editor.Model
-        Behaviour: Behaviour Editor.Model
-        WishList: Toy ID EditorSet.Model
-        ToyNames: Map<Toy ID,string>
-        ToyAgeRange: Map<Toy ID,Age*Age>
-        SaveValidation: Result<unit,string list>
-        SaveResponse: string
-    }
+    type Model =
+        {
+            ID: Kid ID option
+            Latest: Kid Events option
+            Name: string Editor.Model
+            Age: Age Editor.Model
+            Behaviour: Behaviour Editor.Model
+            WishList: Toy ID EditorSet.Model
+            ToyNames: Map<Toy ID,string>
+            ToyAgeRange: Map<Toy ID,Age*Age>
+            SaveValidation: Result<unit,string list>
+            SaveResponse: string
+        }
+        member m.Edits =
+            EditorSet.edit Kid.wishList m.WishList
+            |> Option.cons (Editor.edit Kid.name m.Name)
+            |> Option.cons (Editor.edit Kid.age m.Age)
+            |> Option.cons (Editor.edit Kid.behaviour m.Behaviour)
 
     let init kid =
         {
             ID = kid
-            Current = None
+            Latest = None
             Name = Editor.init Kid.name
             Age = Editor.init Kid.age
             Behaviour = Editor.init Kid.behaviour
@@ -52,21 +58,11 @@ module KidEdit =
         | CreateResult of Result<Kid ID,Store.Error>
         | UpdateResult of Result<unit,Store.Error>
 
-    let update msg model =
-        let edits model = // TODO: deleteing a field doesn't raise the validation
-            model.WishList.Edit
-            |> Option.map (fun e ->
-                let before = model.WishList.Latest |> Option.map snd |> Option.getElse Set.empty
-                List.choose id e |> Set.ofList |> SetEvent.difference before |> List.map Kid.WishList
-                )
-            |> Option.getElse []
-            |> Option.cons (Option.bind (Option.map Kid.Name) model.Name.Edit)
-            |> Option.cons (Option.bind (Option.map Kid.Age) model.Age.Edit)
-            |> Option.cons (Option.bind (Option.map Kid.Behaviour) model.Behaviour.Edit)
+    let update msg model = // TODO: deleteing a field doesn't raise the validation
         let model,cmd =
             match msg with
             | Update l -> {model with
-                            Current = Some l
+                            Latest = Some l
                             Name = Editor.eventUpdate Kid.name l model.Name
                             Age = Editor.eventUpdate Kid.age l model.Age
                             Behaviour = Editor.eventUpdate Kid.behaviour l model.Behaviour
@@ -80,8 +76,8 @@ module KidEdit =
             | WishListMsg w -> {model with WishList=EditorSet.update w model.WishList; SaveResponse=String.empty}, []
             | Save ->
                 let cmd =
-                    List1.tryOfList (edits model)
-                    |> Option.map (addSnd (model.ID, model.Current))
+                    List1.tryOfList model.Edits
+                    |> Option.map (addSnd (model.ID, model.Latest))
                     |> Option.toList
                 (if List.isEmpty cmd then model else {model with SaveResponse="Saving..."}), cmd
             | CreateResult (Ok kid) -> {model with ID=Some kid; SaveResponse="Saved"}, []
@@ -89,7 +85,7 @@ module KidEdit =
             | CreateResult (Error Store.Error.Concurrency)
             | UpdateResult (Error Store.Error.Concurrency) ->
                 {model with SaveResponse="Update happened during save, please retry"}, []
-        {model with SaveValidation=Property.validateEdit Kid.view model.Current (edits model)}, cmd
+        {model with SaveValidation=Property.validateEdit Kid.view model.Latest model.Edits}, cmd
 
     type Sub =
         | Kid of Kid ID
@@ -113,7 +109,7 @@ module KidEdit =
         let tooltip = match model.SaveValidation with | Ok () | Error [] -> None | Error l -> List.rev l |> String.join "\n" |> Some
         UI.div [Vertical] [
             Editor.view UI.inputText model.Name |> UI.map NameMsg
-            Editor.view UI.inputDigits model.Age |> UI.map AgeMsg
+            Editor.view (UI.inputDigits []) model.Age |> UI.map AgeMsg
             Editor.view (UI.select [] [Bad,"Bad";Mixed,"Mixed";Good,"Good"]) model.Behaviour |> UI.map BehaviourMsg
             EditorSet.view (fun style current -> UI.select style toyNames current) model.WishList |> UI.map WishListMsg
             UI.div [Horizontal] [UI.button [isEnabled; Tooltip tooltip] "Save" Save; UI.text [] model.SaveResponse]
@@ -124,20 +120,25 @@ module KidEdit =
 
 module ToyEdit =
 
-    type Model = {
-        ID: Toy ID option
-        Current: Toy Events option
-        Name: string Editor.Model
-        AgeRange: (Age*Age) Editor.Model
-        WorkRequired: uint16 Editor.Model
-        SaveValidation: Result<unit,string list>
-        SaveResponse: string
-    }
+    type Model =
+        {
+            ID: Toy ID option
+            Latest: Toy Events option
+            Name: string Editor.Model
+            AgeRange: (Age*Age) Editor.Model
+            WorkRequired: uint16 Editor.Model
+            SaveValidation: Result<unit,string list>
+            SaveResponse: string
+        }
+        member m.Edits =
+            Option.toList (Editor.edit Toy.name m.Name)
+            |> Option.cons (Editor.edit Toy.ageRange m.AgeRange)
+            |> Option.cons (Editor.edit Toy.workRequired m.WorkRequired)
 
     let init toy =
         {
             ID = toy
-            Current = None
+            Latest = None
             Name = Editor.init Toy.name
             AgeRange = Editor.init Toy.ageRange
             WorkRequired = Editor.init Toy.workRequired
@@ -155,14 +156,10 @@ module ToyEdit =
         | UpdateResult of Result<unit,Store.Error>
 
     let update msg model =
-        let edits model =
-            Option.cons (Option.bind (Option.map Toy.Name) model.Name.Edit) []
-            |> Option.cons (Option.bind (Option.map Toy.AgeRange) model.AgeRange.Edit)
-            |> Option.cons (Option.bind (Option.map Toy.WorkRequired) model.WorkRequired.Edit)
         let model, cmd =
             match msg with
             | Update l -> {model with
-                            Current = Some l
+                            Latest = Some l
                             Name = Editor.eventUpdate Toy.name l model.Name
                             AgeRange = Editor.eventUpdate Toy.ageRange l model.AgeRange
                             WorkRequired = Editor.eventUpdate Toy.workRequired l model.WorkRequired
@@ -170,18 +167,15 @@ module ToyEdit =
             | NameMsg n -> {model with Name=Editor.updateAndValidate Toy.name n model.Name; SaveResponse=String.empty}, []
             | AgeRangeMsg r -> {model with AgeRange=Editor.updateAndValidate Toy.ageRange r model.AgeRange; SaveResponse=String.empty}, []
             | EffortMsg c -> {model with WorkRequired=Editor.updateAndValidate Toy.workRequired c model.WorkRequired; SaveResponse=String.empty}, []
-            | Save ->
-                let cmd =
-                    List1.tryOfList (edits model)
-                    |> Option.map (addSnd (model.ID, model.Current))
-                    |> Option.toList
-                model, cmd
+            | Save -> model, List1.tryOfList model.Edits
+                             |> Option.map (addSnd (model.ID, model.Latest))
+                             |> Option.toList
             | CreateResult (Ok toy) -> {model with ID=Some toy; SaveResponse="Saved"}, []
             | UpdateResult (Ok ()) -> {model with SaveResponse="Saved"}, []
             | CreateResult (Error Store.Error.Concurrency)
             | UpdateResult (Error Store.Error.Concurrency) ->
                 {model with SaveResponse="Update happened during save, please retry"}, []
-        {model with SaveValidation=Property.validateEdit Toy.view model.Current (edits model)}, cmd
+        {model with SaveValidation=Property.validateEdit Toy.view model.Latest model.Edits}, cmd
 
     type Sub =
         | Toy of Toy ID
@@ -198,7 +192,7 @@ module ToyEdit =
         UI.div [Vertical] [
             Editor.view UI.inputText model.Name |> UI.map NameMsg
             Editor.view UI.inputRange model.AgeRange |> UI.map AgeRangeMsg
-            Editor.view UI.inputDigits model.WorkRequired |> UI.map EffortMsg
+            Editor.view (UI.inputDigits []) model.WorkRequired |> UI.map EffortMsg
             UI.div [Horizontal] [UI.button [isEnabled; Tooltip tooltip] "Save" Save; UI.text [] model.SaveResponse]
         ]
 
@@ -208,21 +202,25 @@ module ToyEdit =
 
 module ElfEdit =
 
-    type Model = {
-        ID: Elf ID option
-        Current: Elf Events option
-        Name: string Editor.Model
-        WorkRate: Work Editor.Model
-        Making: Toy ID option
-        ToyNames: Map<Toy ID,string>
-        SaveValidation: Result<unit,string list>
-        SaveResponse: string
-    }
+    type Model =
+        {
+            ID: Elf ID option
+            Latest: Elf Events option
+            Name: string Editor.Model
+            WorkRate: Work Editor.Model
+            Making: Toy ID option
+            ToyNames: Map<Toy ID,string>
+            SaveValidation: Result<unit,string list>
+            SaveResponse: string
+        }
+        member m.Edits =
+            Option.toList (Editor.edit Elf.name m.Name)
+            |> Option.cons (Editor.edit Elf.workRate m.WorkRate)
 
     let init elf =
         {
             ID = elf
-            Current = None
+            Latest = None
             Name = Editor.init Elf.name
             WorkRate = Editor.init Elf.workRate
             Making = None
@@ -241,13 +239,10 @@ module ElfEdit =
         | UpdateResult of Result<unit,Store.Error>
 
     let update msg model =
-        let edits model =
-            Option.cons (Option.bind (Option.map Elf.Name) model.Name.Edit) []
-            |> Option.cons (Option.bind (Option.map Elf.WorkRate) model.WorkRate.Edit)
         let model, cmd =
             match msg with
             | Update l -> {model with
-                            Current = Some l
+                            Latest = Some l
                             Name = Editor.eventUpdate Elf.name l model.Name
                             WorkRate = Editor.eventUpdate Elf.workRate l model.WorkRate
                             Making = Property.get Elf.making l |> Option.bind id
@@ -255,18 +250,15 @@ module ElfEdit =
             | ToyNames m -> {model with ToyNames=m}, []
             | NameMsg n -> {model with Name=Editor.updateAndValidate Elf.name n model.Name; SaveResponse=String.empty}, []
             | WorkRateMsg r -> {model with WorkRate=Editor.updateAndValidate Elf.workRate r model.WorkRate; SaveResponse=String.empty}, []
-            | Save ->
-                let cmd =
-                    List1.tryOfList (edits model)
-                    |> Option.map (addSnd (model.ID, model.Current))
-                    |> Option.toList
-                model, cmd
+            | Save -> model, List1.tryOfList model.Edits
+                             |> Option.map (addSnd (model.ID, model.Latest))
+                             |> Option.toList
             | CreateResult (Ok toy) -> {model with ID=Some toy; SaveResponse="Saved"}, []
             | UpdateResult (Ok ()) -> {model with SaveResponse="Saved"}, []
             | CreateResult (Error Store.Error.Concurrency)
             | UpdateResult (Error Store.Error.Concurrency) ->
                 {model with SaveResponse="Update happened during save, please retry"}, []
-        {model with SaveValidation=Property.validateEdit Elf.view model.Current (edits model)}, cmd
+        {model with SaveValidation=Property.validateEdit Elf.view model.Latest model.Edits}, cmd
 
     type Sub =
         | Elf of Elf ID
@@ -283,7 +275,7 @@ module ElfEdit =
         let tooltip = match model.SaveValidation with | Ok () | Error [] -> None | Error l -> List.rev l |> String.join "\n" |> Some
         UI.div [Vertical] [
             Editor.view UI.inputText model.Name |> UI.map NameMsg
-            Editor.view UI.inputDigits model.WorkRate |> UI.map WorkRateMsg
+            Editor.view (UI.inputDigits []) model.WorkRate |> UI.map WorkRateMsg
             UI.div [Horizontal] [UI.button [isEnabled; Tooltip tooltip] "Save" Save; UI.text [] model.SaveResponse]
             UI.div [Horizontal] [UI.text [Bold] (Elf.making.Name+":"); UI.text [] making]
         ]
@@ -340,9 +332,9 @@ module KidList =
     let view model =
         let header =
             UI.div [Horizontal] [
-                UI.text [Bold; Width 150] "Kid"
-                UI.text [Bold; Width 70] "Requested"
-                UI.text [Bold; Width 70] "Finished"
+                UI.text [Bold; TextColour Red; Width 150] "Kid"
+                UI.text [Bold; TextColour Red; Width 70] "Requested"
+                UI.text [Bold; TextColour Red; Width 70] "Finished"
                 UI.button [Width 50] "new" (OpenEdit None)
             ]
         let rowUI row =
@@ -406,9 +398,9 @@ module ToyList =
     let view model =
         let header =
             UI.div [Horizontal] [
-                UI.text [Bold; Width 150] "Toy"
-                UI.text [Bold; Width 70] "Requested"
-                UI.text [Bold; Width 70] "Finished"
+                UI.text [Bold; TextColour Red; Width 150] "Toy"
+                UI.text [Bold; TextColour Red; Width 70] "Requested"
+                UI.text [Bold; TextColour Red; Width 70] "Finished"
                 UI.button [Width 50] "new" (OpenEdit None)
             ]
         let rowUI row =
@@ -463,8 +455,8 @@ module ElfList =
     let view model =
         let header =
             UI.div [Horizontal] [
-                UI.text [Bold; Width 180] "Elf"
-                UI.text [Bold; Width 140] "Making"
+                UI.text [Bold; TextColour Red; Width 180] "Elf"
+                UI.text [Bold; TextColour Red; Width 140] "Making"
                 UI.button [Width 50] "new" (OpenEdit None)
             ]
         let rowUI row =
