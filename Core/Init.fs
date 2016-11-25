@@ -11,6 +11,7 @@ type Result<'o,'e> =
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module Result =
     let map f r = match r with | Ok x -> Ok (f x) | Error e -> Error e
+    let mapError f r = match r with | Ok o -> Ok o | Error e -> Error (f e)
     let bind binder r = match r with | Ok i -> binder i | Error e -> Error e
     let isOk r = match r with | Ok _ -> true | Error _ -> false
     let apply f x =
@@ -41,6 +42,7 @@ module Option =
     let orTry a o = match o with | None -> a | _ -> o
     let orTryFun f o = match o with | None -> f() | _ -> o
     let cons x xs = match x with | None -> xs | Some x -> x::xs
+    let ofMap m = if Map.isEmpty m then None else Some m
     type OptionBuilder() =
         member __.Bind(v,f) = Option.bind f v
         member __.Return v = Some v
@@ -92,6 +94,16 @@ module List1 =
         List.choose mapping list |> List.collect toList |> tryOfList
 
 module Observable =
+    let collect mapping (o:IObservable<_>) =
+        { new IObservable<_> with
+            member __.Subscribe(ob) =
+                let disp = o.Subscribe {new IObserver<_> with
+                                            member __.OnCompleted() = ob.OnCompleted()
+                                            member __.OnError(e) = ob.OnError e
+                                            member __.OnNext(v) = mapping v |> Seq.iter ob.OnNext
+                                       }
+                {new IDisposable with member __.Dispose() = disp.Dispose() }
+        }
 
     let headAsync (o:IObservable<_>) =
         async {

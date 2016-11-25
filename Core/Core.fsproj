@@ -12,7 +12,7 @@
     <TargetFrameworkVersion>v4.6.1</TargetFrameworkVersion>
     <TargetFSharpCoreVersion>4.4.0.0</TargetFSharpCoreVersion>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
-    <Name>CoreX</Name>
+    <Name>Core</Name>
     <TargetFrameworkProfile />
   </PropertyGroup>
   <ItemGroup>

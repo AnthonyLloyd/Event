@@ -39,12 +39,8 @@ let main _ =
         |> List.iter (fun n -> Store.create oldUser (List1.init (Elf.Name n) [randomWorkRate()]) store |> ignore)
         store
 
-    let kidObservable = Store.observable kidStore
-    let toyObservable = Store.observable toyStore
-    let elfObservable = Store.observable elfStore
-
     let toyProgressObservable =
-        Query.toyProgress kidObservable toyObservable elfObservable
+        Query.toyProgress kidStore toyStore elfStore
         |> Observable.cacheLast
 
     WPF.Initialise()
@@ -70,12 +66,12 @@ let main _ =
 
     let commandHandler cmd =
         match cmd with
-        | Apps.Cmd.OpenKidEdit kid -> Apps.KidEdit.app kid kidObservable toyObservable (saveHandler kidStore Apps.KidEdit.CreateResult Apps.KidEdit.UpdateResult) |> openApp "Kid"
-        | Apps.Cmd.OpenToyEdit toy -> Apps.ToyEdit.app toy toyObservable (saveHandler toyStore Apps.ToyEdit.CreateResult Apps.ToyEdit.UpdateResult) |> openApp "Toy"
-        | Apps.Cmd.OpenElfEdit elf -> Apps.ElfEdit.app elf elfObservable toyObservable (saveHandler elfStore Apps.ElfEdit.CreateResult Apps.ElfEdit.UpdateResult) |> openApp "Elf"
+        | Apps.Cmd.OpenKidEdit kid -> Apps.KidEdit.app kid kidStore toyStore (saveHandler kidStore Apps.KidEdit.CreateResult Apps.KidEdit.UpdateResult) |> openApp "Kid"
+        | Apps.Cmd.OpenToyEdit toy -> Apps.ToyEdit.app toy toyStore (saveHandler toyStore Apps.ToyEdit.CreateResult Apps.ToyEdit.UpdateResult) |> openApp "Toy"
+        | Apps.Cmd.OpenElfEdit elf -> Apps.ElfEdit.app elf elfStore toyStore (saveHandler elfStore Apps.ElfEdit.CreateResult Apps.ElfEdit.UpdateResult) |> openApp "Elf"
         None
 
-    let app = Apps.Main.app kidObservable toyObservable elfObservable toyProgressObservable commandHandler
+    let app = Apps.Main.app kidStore toyStore elfStore toyProgressObservable commandHandler
 
     use kids = Procs.kidsRun kidStore toyStore
     
@@ -85,4 +81,8 @@ let main _ =
 
     Application().Run(mainWindow) |> ignore
     
+    ui.Dispose()
+    kids.Dispose()
+    santa.Dispose()
+
     0

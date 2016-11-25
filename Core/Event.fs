@@ -40,6 +40,7 @@ type 'Aggregate ID = private Created of EventID
 
 module ID =
     let internal gen eventID = Created eventID
+    let internal eventID (Created e) = e
 
 type 'Aggregate Events = (EventID * 'Aggregate list1) list1
 
@@ -47,63 +48,96 @@ module Events =
     let lasteEventID (events:'Aggregate Events) =
         List1.head events |> fst
 
+type StoreError =
+    | Concurrency
+
 [<NoEquality;NoComparison>]
-type 'Aggregate MemoryStore = {Updates: Map<'Aggregate ID,'Aggregate Events>; Observers: IObserver<'Aggregate ID*'Aggregate Events> list}
+type 'Aggregate MemoryStore =
+    {
+        Updates: Map<'Aggregate ID,'Aggregate Events>
+        Observers: IObserver<Map<'Aggregate ID,'Aggregate Events>> list
+        DeltaObservers: IObserver<Map<'Aggregate ID,'Aggregate Events>> list
+    }
+
+module MemoryStore =
+    let empty = {Updates=Map.empty; Observers=[]; DeltaObservers=[]}
+
+    let fullObservable (store:'Aggregate MemoryStore ref) =
+        {new IObservable<_> with
+            member __.Subscribe(ob:IObserver<_>) =
+                let _,newStore = atomicUpdate (fun i -> {i with Observers=ob::i.Observers}) store
+                ob.OnNext newStore.Updates
+                {new IDisposable with
+                    member __.Dispose() =
+                        atomicUpdate (fun i -> {i with Observers=List.where ((<>)ob) i.Observers}) store |> ignore
+                }
+            }
+
+    let deltaObservable (store:'Aggregate MemoryStore ref) =
+        {new IObservable<_> with
+            member __.Subscribe(ob:IObserver<_>) =
+                let _,newStore = atomicUpdate (fun i -> {i with DeltaObservers=ob::i.DeltaObservers}) store
+                ob.OnNext newStore.Updates
+                {new IDisposable with
+                    member __.Dispose() =
+                        atomicUpdate (fun i -> {i with DeltaObservers=List.where ((<>)ob) i.DeltaObservers}) store |> ignore
+                }
+            }
+
+    let update (user:UserID) (aggregateID:'Aggregate ID) (updates:'Aggregate list1) (lastEvent:EventID) (store:'Aggregate MemoryStore ref) =
+        let newStore, result =
+            atomicUpdateQuery (fun store ->
+                let l = Map.find aggregateID store.Updates
+                if List1.head l |> fst = lastEvent then
+                    let eventID = EventID.gen user
+                    {store with Updates=Map.add aggregateID (List1.init (eventID,updates) (List1.toList l)) store.Updates}, Ok eventID
+                else store, Error Concurrency
+            ) store
+        match result with
+        | Ok eventID ->
+            newStore.DeltaObservers |> Seq.iter (fun ob -> Map.add aggregateID (List1.singleton (eventID,updates)) Map.empty |> ob.OnNext)
+            newStore.Observers |> Seq.iter (fun ob -> ob.OnNext newStore.Updates)
+            result
+        | _ -> result
+
+    let create (user:UserID) (updates:'Aggregate list1) (store:'Aggregate MemoryStore ref) =
+        let newStore,result =
+            atomicUpdateQuery (fun store ->
+                let eventID = EventID.gen user
+                let aggregateID = ID.gen eventID
+                {store with Updates=Map.add aggregateID (List1.singleton (eventID,updates)) store.Updates}, Ok aggregateID
+            ) store
+        match result with
+        | Ok aggregateID ->
+            newStore.DeltaObservers |> Seq.iter (fun ob -> Map.add aggregateID (List1.singleton (ID.eventID aggregateID,updates)) Map.empty |> ob.OnNext)
+            newStore.Observers |> Seq.iter (fun ob -> ob.OnNext newStore.Updates)
+            result
+        | _ -> result
 
 [<NoEquality;NoComparison>]
 type 'Aggregate Store =
     | MemoryStore of 'Aggregate MemoryStore ref
+    //| RemoteStore - implement me
 
 module Store =
-    let emptyMemoryStore() = {Updates=Map.empty; Observers=[]} |> ref |> MemoryStore
+    let emptyMemoryStore() = MemoryStore.empty |> ref |> MemoryStore
+    /// Returns the full store state on each update.
     let observable (store:'Aggregate Store) =
         match store with
-        | MemoryStore storeRef ->
-            {new IObservable<_> with
-                member __.Subscribe(ob:IObserver<_>) =
-                    let _,newStore = atomicUpdate (fun i -> {Updates=i.Updates; Observers=ob::i.Observers}) storeRef
-                    Map.toSeq newStore.Updates |> Seq.iter ob.OnNext
-                    {new IDisposable with
-                        member __.Dispose() =
-                            atomicUpdate (fun i -> {Updates=i.Updates; Observers=List.where ((<>)ob) i.Observers}) storeRef |> ignore
-                    }
-            }
-
-    type Error =
-        | Concurrency
-
+        | MemoryStore store -> MemoryStore.fullObservable store
+    /// Returns the full store state and then subsequent changes.
+    let deltaObservable (store:'Aggregate Store) =
+        match store with
+        | MemoryStore store -> MemoryStore.deltaObservable store
     let update (user:UserID) (aggregateID:'Aggregate ID) (updates:'Aggregate list1) (lastEvent:EventID) (store:'Aggregate Store) =
         match store with
-        | MemoryStore storeRef ->
-            let newStore,result =
-                atomicUpdateQuery (fun store ->
-                    let l = Map.find aggregateID store.Updates
-                    if List1.head l |> fst = lastEvent then
-                        let eventID = EventID.gen user
-                        {Updates=Map.add aggregateID (List1.init (eventID,updates) (List1.toList l)) store.Updates; Observers=store.Observers}, Ok ()
-                    else store, Error Concurrency
-                ) storeRef
-            if Result.isOk result then newStore.Observers |> Seq.iter (fun ob -> ob.OnNext(aggregateID,Map.find aggregateID newStore.Updates))
-            result
-
-    let create (user:UserID) (updates:'Aggregate list1) (store:'Aggregate Store) : Result<_,Error> =
+        | MemoryStore store -> MemoryStore.update user aggregateID updates lastEvent store
+    let create (user:UserID) (updates:'Aggregate list1) (store:'Aggregate Store) =
         match store with
-        | MemoryStore storeRef ->
-            let newStore,result =
-                atomicUpdateQuery (fun store ->
-                    let eventID = EventID.gen user
-                    let aggregateID = ID.gen eventID
-                    {Updates=Map.add aggregateID (List1.singleton (eventID,updates)) store.Updates; Observers=store.Observers}, Ok aggregateID
-                ) storeRef
-            match result with
-            | Ok aggregateID -> newStore.Observers |> Seq.iter (fun ob -> ob.OnNext(aggregateID,Map.find aggregateID newStore.Updates))
-            | Error _ -> ()
-            result
-
+        | MemoryStore store -> MemoryStore.create user updates store
     let getAll (store:'Aggregate Store) =
         match store with
-        | MemoryStore storeRef ->
-            storeRef.Value.Updates
+        | MemoryStore store -> store.Value.Updates
 
 type 'a SetEvent =
     | SetAdd of 'a
@@ -160,6 +194,8 @@ module Property =
         List1.tryChoose (fun (e,l) -> List1.tryChoose property.Getter l |> Option.map (addFst e)) update
     let getAndValidate (property:Property<'a,'b>) (updates:'a Events) =
         get property updates |> property.Validation
+    let validate (property:Property<'a,'b>) (edit:'b option) =
+        property.Validation edit
     let validateEdit (view:'a Events -> Result<'b,('a*string) list>) (current:'a Events option) (edits:'a list) =
         match List1.tryOfList edits with
         | None -> Error []
@@ -169,6 +205,9 @@ module Property =
                 match current with
                 | None -> List1.singleton update
                 | Some events -> List1.cons update events
-            match view proposed with
-            | Ok _ -> Ok ()
-            | Error l -> List.map snd l |> Error
+            view proposed
+    let deltaObservable property store =
+        Store.deltaObservable store
+        |> Observable.choose (Map.choose (fun _ -> get property) >> Option.ofMap)
+    let fullObservable property store =
+        deltaObservable property store |> Observable.scan (Map.fold (fun m k v -> Map.add k v m)) Map.empty

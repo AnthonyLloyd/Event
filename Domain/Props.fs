@@ -60,71 +60,37 @@ module Kid =
 
 
 module Query =
-    
-    let private toDelta observable =
-        observable
-        |> Observable.scan (fun (lastMap,_) (aid,events) ->
-                let eventsDiff =
-                    match Map.tryFind aid lastMap with
-                    | None -> List1.toList events
-                    | Some eid -> List1.toList events |> List.takeWhile (fst>>(<>)eid)
-                Map.add aid (List1.head events |> fst) lastMap, (aid,eventsDiff)
-            ) (Map.empty,(Unchecked.defaultof<_>,List.empty))
-        |> Observable.choose (fun (_,(aid,l)) -> List1.tryOfList l |> Option.map (addFst aid))
 
-    let kidName (kidEvents:IObservable<Kid ID * Kid Events>) =
-        toDelta kidEvents
-        |> Observable.choose (fun (kid,events) -> Property.get Kid.name events |> Option.map (addFst kid))
+    let kidWishListEvent (kidStore:Kid Store) : IObservable<Map<Kid ID,Map<Toy ID,EventID>>> =
+        Store.deltaObservable kidStore
+        |> Observable.choose (fun (map:Map<Kid ID,Kid Events>) ->
+            Map.toList map
+            |> List.choose (fun (kid,events) ->
+                    List1.tryCollect (fun (eid,l)  -> List1.tryChoose Kid.wishList.Getter l |> Option.map (List1.map (function |SetAdd toy -> MapAdd (toy,eid) |SetRemove toy -> MapRemove toy))) events
+                    |> Option.map (addFst kid)
+                )
+            |> List1.tryOfList
+           )
+        |> Observable.scan (
+            List1.fold (fun map (kid,mapEvents) ->
+                let newMap = Map.tryFind kid map |> Option.getElse Map.empty |> MapEvent.update mapEvents
+                Map.add kid newMap map)
+           ) Map.empty
 
-    let kidAge (kidEvents:IObservable<Kid ID * Kid Events>) =
-        toDelta kidEvents
-        |> Observable.choose (fun (kid,events) -> Property.get Kid.age events |> Option.map (addFst kid))
+    let toyProgress (kidStore:Kid Store) (toyStore:Toy Store) (elfStore:Elf Store) =
 
-    let kidBehaviour (kidEvents:IObservable<Kid ID * Kid Events>) =
-        toDelta kidEvents
-        |> Observable.choose (fun (kid,events) -> Property.get Kid.behaviour events |> Option.map (addFst kid))
-
-    let kidWishListEvent (kidEvents:IObservable<Kid ID * Kid Events>) =
-        toDelta kidEvents
-        |> Observable.choose (fun (elf,events) ->
-            List1.tryCollect (fun (eid,l) -> List1.tryChoose Kid.wishList.Getter l |> Option.map (List1.map (function |SetAdd toy -> MapAdd (toy,eid) |SetRemove toy -> MapRemove toy))) events
-            |> Option.map (addFst elf))
-        |> Observable.scan (fun (map,_) (kid,mapEvents) ->
-            let newSet = Map.tryFind kid map |> Option.getElse Map.empty |> MapEvent.update mapEvents
-            Map.add kid newSet map, (kid,newSet)
-            ) (Map.empty,Unchecked.defaultof<_>)
-        |> Observable.map snd
-
-    let toyName (toyEvents:IObservable<Toy ID * Toy Events>) =
-        toDelta toyEvents
-        |> Observable.choose (fun (toy,events) -> Property.get Toy.name events |> Option.map (addFst toy))
-
-    let toyAgeRange (toyEvents:IObservable<Toy ID * Toy Events>) =
-        toDelta toyEvents
-        |> Observable.choose (fun (toy,events) -> Property.get Toy.ageRange events |> Option.map (addFst toy))
-
-    let toyNames (toyEvents:IObservable<Toy ID * Toy Events>) = // TODO: These fire events as the build up, need only latest and updates
-        toyName toyEvents
-        |> Observable.scan (fun m (toy,name) -> Map.add toy name m) Map.empty
-
-    let toyAgeRanges (toyEvents:IObservable<Toy ID * Toy Events>) =
-        toyAgeRange toyEvents
-        |> Observable.scan (fun m (toy,ageRange) -> Map.add toy ageRange m) Map.empty
-
-    let toyProgress kidEvents toyEvents elfEvents =
-
-        let toyFinished (elfEvents:IObservable<Elf ID * Elf Events>) =
-            toDelta elfEvents
-            |> Observable.choose (fun (elf,events) -> List1.tryCollect (snd >> List1.tryChoose Elf.making.Getter) events |> Option.map (addFst elf))
-            |> Observable.scan (fun ((total,making),_) (elf,events) ->
-                    let newTotal = List1.toList events |> List.choose id |> List.fold Map.incr total
-                    let newMaking = Map.addOrRemove elf (List1.head events) making
-                    let toyUpdate =
-                        let finished = Map.toSeq making |> Seq.map snd |> Seq.fold Map.decr total
-                        let newFinished = Map.toSeq newMaking |> Seq.map snd |> Seq.fold Map.decr newTotal
-                        Map.revisions finished newFinished |> Map.toList |> List1.tryOfList
-                    (newTotal,newMaking),toyUpdate) ((Map.empty,Map.empty),None)
-            |> Observable.choose snd
+        let toyFinished (elfStore:Elf Store) =
+            Store.deltaObservable elfStore
+            |> Observable.choose (Map.choose (fun _ -> Property.tryGetEvents Elf.making) >> Option.ofMap)
+            |> Observable.scan (fun ((total,making),_) (map:Map<Elf ID,Toy ID option Events>) ->
+                    let newTotal =
+                        Map.toSeq map
+                        |> Seq.collect (snd >> List1.toList >> Seq.collect (snd >> List1.toList >> Seq.choose id))
+                        |> Seq.fold Map.incr total
+                    let newMaking = Map.fold (fun map elf events -> Map.addOrRemove elf (List1.head events |> snd |> List1.head) map) making map
+                    let toyUpdate = Map.toSeq making |> Seq.map snd |> Seq.fold Map.decr total
+                    (newTotal,newMaking),toyUpdate) ((Map.empty,Map.empty),Map.empty)
+            |> Observable.map snd
 
         let progress (finished:Map<Toy ID,int>) (ageRanges:Map<Toy ID,Age*Age>) (ages:Map<Kid ID,Age>) (behaviours:Map<Kid ID,Behaviour>) (wishListEvents:Map<Kid ID,Map<Toy ID,EventID>>) =
 
@@ -149,28 +115,18 @@ module Query =
                 )
             |> Map.ofSeq
 
-        toyFinished elfEvents |> Observable.map Choice1Of5
-        |> Observable.merge (toyAgeRange toyEvents |> Observable.map Choice2Of5)
-        |> Observable.merge (kidAge kidEvents |> Observable.map Choice3Of5)
-        |> Observable.merge (kidBehaviour kidEvents |> Observable.map Choice4Of5)
-        |> Observable.merge (kidWishListEvent kidEvents |> Observable.map Choice5Of5)
+        toyFinished elfStore |> Observable.map Choice1Of5
+        |> Observable.merge (Property.fullObservable Toy.ageRange toyStore |> Observable.map Choice2Of5)
+        |> Observable.merge (Property.fullObservable Kid.age kidStore |> Observable.map Choice3Of5)
+        |> Observable.merge (Property.fullObservable Kid.behaviour kidStore |> Observable.map Choice4Of5)
+        |> Observable.merge (kidWishListEvent kidStore |> Observable.map Choice5Of5)
         |> Observable.scan (fun (finished,ageRanges,ages,behaviours,wishListEvents) choice ->
                 match choice with
-                |Choice1Of5 l ->
-                    let finished = List1.fold (fun f (toy,n) -> Map.add toy n f) finished l
-                    (finished,ageRanges,ages,behaviours,wishListEvents)
-                |Choice2Of5 (toy,ageRange) ->
-                    let ageRanges = Map.add toy ageRange ageRanges
-                    (finished,ageRanges,ages,behaviours,wishListEvents)
-                |Choice3Of5 (kid,age) ->
-                    let ages = Map.add kid age ages
-                    (finished,ageRanges,ages,behaviours,wishListEvents)
-                |Choice4Of5 (kid,behaviour) ->
-                    let behaviours = Map.add kid behaviour behaviours
-                    (finished,ageRanges,ages,behaviours,wishListEvents)
-                |Choice5Of5 (kid,toyEvents) ->
-                    let wishListEvents = Map.add kid toyEvents wishListEvents
-                    (finished,ageRanges,ages,behaviours,wishListEvents)
+                |Choice1Of5 finished -> (finished,ageRanges,ages,behaviours,wishListEvents)
+                |Choice2Of5 ageRanges -> (finished,ageRanges,ages,behaviours,wishListEvents)
+                |Choice3Of5 ages -> (finished,ageRanges,ages,behaviours,wishListEvents)
+                |Choice4Of5 behaviours -> (finished,ageRanges,ages,behaviours,wishListEvents)
+                |Choice5Of5 wishListEvents -> (finished,ageRanges,ages,behaviours,wishListEvents)
             ) (Map.empty,Map.empty,Map.empty,Map.empty,Map.empty)
         |> Observable.map (fun (f,r,a,b,w) -> progress f r a b w)
 

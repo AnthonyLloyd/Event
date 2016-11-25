@@ -62,8 +62,18 @@ module Editor =
     let validate property model =
         {model with Invalid = Option.bind (fun e -> match property.Validation e with | Ok _ -> None | Error (_,s) -> Some s) model.Edit}
 
-    let updateAndValidate property msg model =
-        update msg model |> validate property
+    let updateAndValidate property validator model latest edits msg =
+        let model = update msg model
+        match model.Edit with
+        | None -> model, Property.validateEdit validator latest edits
+        | Some e ->
+            match Property.validate property e with
+            | Ok _ -> {model with Invalid=None}, Property.validateEdit validator latest edits
+            | Error (k,v) ->
+                let validation =
+                    Property.validateEdit validator latest edits
+                    |> Result.mapError (fun l -> if List.exists (fst>>(=)k) l then l else (k,v)::l)
+                {model with Invalid=Some v}, validation
 
     let edit property model =
         match model.Edit with

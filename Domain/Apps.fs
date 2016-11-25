@@ -24,7 +24,7 @@ module KidEdit =
             WishList: Toy ID EditorSet.Model
             ToyNames: Map<Toy ID,string>
             ToyAgeRange: Map<Toy ID,Age*Age>
-            SaveValidation: Result<unit,string list>
+            SaveValidation: Result<unit,(Kid*string) list>
             SaveResponse: string
         }
         member m.Edits =
@@ -55,49 +55,55 @@ module KidEdit =
         | BehaviourMsg of Behaviour Editor.Msg
         | WishListMsg of Toy ID EditorSet.Msg
         | Save
-        | CreateResult of Result<Kid ID,Store.Error>
-        | UpdateResult of Result<unit,Store.Error>
+        | CreateResult of Result<Kid ID,StoreError>
+        | UpdateResult of Result<unit,StoreError>
 
-    let update msg model = // TODO: deleteing a field doesn't raise the validation
-        let model,cmd =
-            match msg with
-            | Update l -> {model with
+    let update msg model =
+        match msg with
+        | Update l ->
+            let model = {model with
                             Latest = Some l
                             Name = Editor.eventUpdate Kid.name l model.Name
                             Age = Editor.eventUpdate Kid.age l model.Age
                             Behaviour = Editor.eventUpdate Kid.behaviour l model.Behaviour
                             WishList = EditorSet.updateProperty Kid.wishList l model.WishList
-                          }, []
-            | ToyNames m -> {model with ToyNames=m; WishList=EditorSet.update (EditorSet.Order m) model.WishList}, []
-            | ToyAgeRanges m -> {model with ToyAgeRange=m}, []
-            | NameMsg n -> {model with Name=Editor.updateAndValidate Kid.name n model.Name; SaveResponse=String.empty}, []
-            | AgeMsg r -> {model with Age=Editor.updateAndValidate Kid.age r model.Age; SaveResponse=String.empty}, []
-            | BehaviourMsg c -> {model with Behaviour=Editor.updateAndValidate Kid.behaviour c model.Behaviour; SaveResponse=String.empty}, []
-            | WishListMsg w -> {model with WishList=EditorSet.update w model.WishList; SaveResponse=String.empty}, []
-            | Save ->
-                let cmd =
-                    List1.tryOfList model.Edits
-                    |> Option.map (addSnd (model.ID, model.Latest))
-                    |> Option.toList
-                (if List.isEmpty cmd then model else {model with SaveResponse="Saving..."}), cmd
-            | CreateResult (Ok kid) -> {model with ID=Some kid; SaveResponse="Saved"}, []
-            | UpdateResult (Ok ()) -> {model with SaveResponse="Saved"}, []
-            | CreateResult (Error Store.Error.Concurrency)
-            | UpdateResult (Error Store.Error.Concurrency) ->
-                {model with SaveResponse="Update happened during save, please retry"}, []
-        {model with SaveValidation=Property.validateEdit Kid.view model.Latest model.Edits}, cmd
+                        }
+            {model with SaveValidation=Property.validateEdit (Kid.view>>Result.map ignore) model.Latest model.Edits}, []
+        | ToyNames m -> {model with ToyNames=m; WishList=EditorSet.update (EditorSet.Order m) model.WishList}, []
+        | ToyAgeRanges m -> {model with ToyAgeRange=m}, []
+        | NameMsg n ->
+            let name, valid = Editor.updateAndValidate Kid.name (Kid.view>>Result.map ignore) model.Name model.Latest model.Edits n
+            {model with Name=name; SaveValidation=valid; SaveResponse=String.empty}, []
+        | AgeMsg a ->
+            let age, valid = Editor.updateAndValidate Kid.age (Kid.view>>Result.map ignore) model.Age model.Latest model.Edits a
+            {model with Age=age; SaveValidation=valid; SaveResponse=String.empty}, []
+        | BehaviourMsg b ->
+            let beh, valid = Editor.updateAndValidate Kid.behaviour (Kid.view>>Result.map ignore) model.Behaviour model.Latest model.Edits b
+            {model with Behaviour=beh; SaveValidation=valid; SaveResponse=String.empty}, []
+        | WishListMsg w -> {model with WishList=EditorSet.update w model.WishList; SaveResponse=String.empty}, []
+        | Save ->
+            let cmd =
+                List1.tryOfList model.Edits
+                |> Option.map (addSnd (model.ID, model.Latest))
+                |> Option.toList
+            (if List.isEmpty cmd then model else {model with SaveResponse="Saving..."}), cmd
+        | CreateResult (Ok kid) -> {model with ID=Some kid; SaveResponse="Saved"}, []
+        | UpdateResult (Ok ()) -> {model with SaveResponse="Saved"}, []
+        | CreateResult (Error StoreError.Concurrency)
+        | UpdateResult (Error StoreError.Concurrency) ->
+            {model with SaveResponse="Update happened during save, please retry"}, []
 
     type Sub =
         | Kid of Kid ID
         | ToyName
         | ToyAgeRange
 
-    let subscription kidEvents toyEvents model =
+    let subscription kidStore toyStore model =
         [
-            ToyName, Query.toyNames toyEvents |> Observable.map ToyNames
-            ToyAgeRange, Query.toyAgeRanges toyEvents |> Observable.map ToyAgeRanges
+            ToyName, Property.fullObservable Toy.name toyStore |> Observable.map ToyNames
+            ToyAgeRange, Property.fullObservable Toy.ageRange toyStore |> Observable.map ToyAgeRanges
         ]
-        |> Option.cons (Option.map (fun tid -> Kid tid, Observable.choose (fun (i,e) -> if i=tid then Some e else None) kidEvents |> Observable.map Update) model.ID)
+        |> Option.cons (Option.map (fun kid -> Kid kid, Store.deltaObservable kidStore |> Observable.choose (Map.tryFind kid >> Option.map Update)) model.ID)
         |> Map.ofList
 
     let view model =
@@ -106,7 +112,7 @@ module KidEdit =
                                                     Map.tryFind toy model.ToyNames |> Option.map (addFst toy)
                                                   else None ) model.Age.Current)
         let isEnabled = Result.isOk model.SaveValidation |> IsEnabled
-        let tooltip = match model.SaveValidation with | Ok () | Error [] -> None | Error l -> List.rev l |> String.join "\n" |> Some
+        let tooltip = match model.SaveValidation with | Ok () | Error [] -> None | Error l -> List.rev l |> Seq.map snd |> String.join "\n" |> Some
         UI.div [Vertical] [
             Editor.view UI.inputText model.Name |> UI.map NameMsg
             Editor.view (UI.inputDigits []) model.Age |> UI.map AgeMsg
@@ -115,7 +121,7 @@ module KidEdit =
             UI.div [Horizontal] [UI.button [isEnabled; Tooltip tooltip] "Save" Save; UI.text [] model.SaveResponse]
         ]
 
-    let app kid kidEvents toyEvents handler = UI.app (fun () -> init kid) update view (subscription kidEvents toyEvents) handler
+    let app kid kidStore toyStore handler = UI.app (fun () -> init kid) update view (subscription kidStore toyStore) handler
 
 
 module ToyEdit =
@@ -127,7 +133,7 @@ module ToyEdit =
             Name: string Editor.Model
             AgeRange: (Age*Age) Editor.Model
             WorkRequired: uint16 Editor.Model
-            SaveValidation: Result<unit,string list>
+            SaveValidation: Result<unit,(Toy*string) list>
             SaveResponse: string
         }
         member m.Edits =
@@ -150,49 +156,55 @@ module ToyEdit =
         | Update of Toy Events
         | NameMsg of string Editor.Msg
         | AgeRangeMsg of (Age*Age) Editor.Msg
-        | EffortMsg of uint16 Editor.Msg
+        | WorkMsg of uint16 Editor.Msg
         | Save
-        | CreateResult of Result<Toy ID,Store.Error>
-        | UpdateResult of Result<unit,Store.Error>
+        | CreateResult of Result<Toy ID,StoreError>
+        | UpdateResult of Result<unit,StoreError>
 
     let update msg model =
-        let model, cmd =
-            match msg with
-            | Update l -> {model with
+        match msg with
+        | Update l ->
+            let model = {model with
                             Latest = Some l
                             Name = Editor.eventUpdate Toy.name l model.Name
                             AgeRange = Editor.eventUpdate Toy.ageRange l model.AgeRange
                             WorkRequired = Editor.eventUpdate Toy.workRequired l model.WorkRequired
-                          }, []
-            | NameMsg n -> {model with Name=Editor.updateAndValidate Toy.name n model.Name; SaveResponse=String.empty}, []
-            | AgeRangeMsg r -> {model with AgeRange=Editor.updateAndValidate Toy.ageRange r model.AgeRange; SaveResponse=String.empty}, []
-            | EffortMsg c -> {model with WorkRequired=Editor.updateAndValidate Toy.workRequired c model.WorkRequired; SaveResponse=String.empty}, []
-            | Save -> model, List1.tryOfList model.Edits
-                             |> Option.map (addSnd (model.ID, model.Latest))
-                             |> Option.toList
-            | CreateResult (Ok toy) -> {model with ID=Some toy; SaveResponse="Saved"}, []
-            | UpdateResult (Ok ()) -> {model with SaveResponse="Saved"}, []
-            | CreateResult (Error Store.Error.Concurrency)
-            | UpdateResult (Error Store.Error.Concurrency) ->
-                {model with SaveResponse="Update happened during save, please retry"}, []
-        {model with SaveValidation=Property.validateEdit Toy.view model.Latest model.Edits}, cmd
+                        }
+            {model with SaveValidation=Property.validateEdit (Toy.view>>Result.map ignore) model.Latest model.Edits}, []
+        | NameMsg n ->
+            let name, valid = Editor.updateAndValidate Toy.name (Toy.view>>Result.map ignore) model.Name model.Latest model.Edits n
+            {model with Name=name; SaveValidation=valid; SaveResponse=String.empty}, []
+        | AgeRangeMsg a ->
+            let age, valid = Editor.updateAndValidate Toy.ageRange (Toy.view>>Result.map ignore) model.AgeRange model.Latest model.Edits a
+            {model with AgeRange=age; SaveValidation=valid; SaveResponse=String.empty}, []
+        | WorkMsg w ->
+            let work, valid = Editor.updateAndValidate Toy.workRequired (Toy.view>>Result.map ignore) model.WorkRequired model.Latest model.Edits w
+            {model with WorkRequired=work; SaveValidation=valid; SaveResponse=String.empty}, []
+        | Save -> model, List1.tryOfList model.Edits
+                            |> Option.map (addSnd (model.ID, model.Latest))
+                            |> Option.toList
+        | CreateResult (Ok toy) -> {model with ID=Some toy; SaveResponse="Saved"}, []
+        | UpdateResult (Ok ()) -> {model with SaveResponse="Saved"}, []
+        | CreateResult (Error StoreError.Concurrency)
+        | UpdateResult (Error StoreError.Concurrency) ->
+            {model with SaveResponse="Update happened during save, please retry"}, []
 
     type Sub =
         | Toy of Toy ID
 
-    let subscription toyEvents model =
-        Option.map (fun tid ->
-            Toy tid, Observable.choose (fun (i,e) -> if i=tid then Some e else None) toyEvents |> Observable.map Update
+    let subscription toyStore model =
+        Option.map (fun toy ->
+            Toy toy, Store.deltaObservable toyStore |> Observable.choose (Map.tryFind toy >> Option.map Update)
             ) model.ID
         |> Option.toList |> Map.ofList
 
     let view model =
         let isEnabled = Result.isOk model.SaveValidation |> IsEnabled
-        let tooltip = match model.SaveValidation with | Ok () | Error [] -> None | Error l -> List.rev l |> String.join "\n" |> Some
+        let tooltip = match model.SaveValidation with | Ok () | Error [] -> None | Error l -> List.rev l |> Seq.map snd |> String.join "\n" |> Some
         UI.div [Vertical] [
             Editor.view UI.inputText model.Name |> UI.map NameMsg
             Editor.view UI.inputRange model.AgeRange |> UI.map AgeRangeMsg
-            Editor.view (UI.inputDigits []) model.WorkRequired |> UI.map EffortMsg
+            Editor.view (UI.inputDigits []) model.WorkRequired |> UI.map WorkMsg
             UI.div [Horizontal] [UI.button [isEnabled; Tooltip tooltip] "Save" Save; UI.text [] model.SaveResponse]
         ]
 
@@ -210,7 +222,7 @@ module ElfEdit =
             WorkRate: Work Editor.Model
             Making: Toy ID option
             ToyNames: Map<Toy ID,string>
-            SaveValidation: Result<unit,string list>
+            SaveValidation: Result<unit,(Elf*string) list>
             SaveResponse: string
         }
         member m.Edits =
@@ -235,52 +247,56 @@ module ElfEdit =
         | NameMsg of string Editor.Msg
         | WorkRateMsg of Work Editor.Msg
         | Save
-        | CreateResult of Result<Elf ID,Store.Error>
-        | UpdateResult of Result<unit,Store.Error>
+        | CreateResult of Result<Elf ID,StoreError>
+        | UpdateResult of Result<unit,StoreError>
 
     let update msg model =
-        let model, cmd =
-            match msg with
-            | Update l -> {model with
+        match msg with
+        | Update l ->
+            let model = {model with
                             Latest = Some l
                             Name = Editor.eventUpdate Elf.name l model.Name
                             WorkRate = Editor.eventUpdate Elf.workRate l model.WorkRate
                             Making = Property.get Elf.making l |> Option.bind id
-                          }, []
-            | ToyNames m -> {model with ToyNames=m}, []
-            | NameMsg n -> {model with Name=Editor.updateAndValidate Elf.name n model.Name; SaveResponse=String.empty}, []
-            | WorkRateMsg r -> {model with WorkRate=Editor.updateAndValidate Elf.workRate r model.WorkRate; SaveResponse=String.empty}, []
-            | Save -> model, List1.tryOfList model.Edits
-                             |> Option.map (addSnd (model.ID, model.Latest))
-                             |> Option.toList
-            | CreateResult (Ok toy) -> {model with ID=Some toy; SaveResponse="Saved"}, []
-            | UpdateResult (Ok ()) -> {model with SaveResponse="Saved"}, []
-            | CreateResult (Error Store.Error.Concurrency)
-            | UpdateResult (Error Store.Error.Concurrency) ->
-                {model with SaveResponse="Update happened during save, please retry"}, []
-        {model with SaveValidation=Property.validateEdit Elf.view model.Latest model.Edits}, cmd
+                        }
+            {model with SaveValidation=Property.validateEdit (Elf.view>>Result.map ignore) model.Latest model.Edits}, []
+        | ToyNames m -> {model with ToyNames=m}, []
+        | NameMsg n ->
+            let name, valid = Editor.updateAndValidate Elf.name (Elf.view>>Result.map ignore) model.Name model.Latest model.Edits n
+            {model with Name=name; SaveValidation=valid; SaveResponse=String.empty}, []
+        | WorkRateMsg w ->
+            let work, valid = Editor.updateAndValidate Elf.workRate (Elf.view>>Result.map ignore) model.WorkRate model.Latest model.Edits w
+            {model with WorkRate=work; SaveValidation=valid; SaveResponse=String.empty}, []
+        | Save -> model, List1.tryOfList model.Edits
+                            |> Option.map (addSnd (model.ID, model.Latest))
+                            |> Option.toList
+        | CreateResult (Ok toy) -> {model with ID=Some toy; SaveResponse="Saved"}, []
+        | UpdateResult (Ok ()) -> {model with SaveResponse="Saved"}, []
+        | CreateResult (Error StoreError.Concurrency)
+        | UpdateResult (Error StoreError.Concurrency) ->
+            {model with SaveResponse="Update happened during save, please retry"}, []
 
     type Sub =
         | Elf of Elf ID
         | ToyName
 
-    let subscription elfEvents toyEvents model =
-        [(ToyName, Query.toyNames toyEvents |> Observable.map ToyNames)]
-        |> Option.cons (Option.map (fun tid -> Elf tid, Observable.choose (fun (i,e) -> if i=tid then Some e else None) elfEvents |> Observable.map Update) model.ID)
+    let subscription elfStore toyStore model =
+        [(ToyName, Property.fullObservable Toy.name toyStore |> Observable.map ToyNames)]
+        |> Option.cons (Option.map (fun elf -> Elf elf, Store.deltaObservable elfStore |> Observable.choose (Map.tryFind elf >> Option.map Update)) model.ID)
         |> Map.ofList
 
     let view model =
         let making = Option.bind (fun tid -> Map.tryFind tid model.ToyNames) model.Making |> Option.getElse "Nothing"
         let isEnabled = Result.isOk model.SaveValidation |> IsEnabled
-        let tooltip = match model.SaveValidation with | Ok () | Error [] -> None | Error l -> List.rev l |> String.join "\n" |> Some
+        let tooltip = match model.SaveValidation with | Ok () | Error [] -> None | Error l -> List.rev l |> Seq.map snd |> String.join "\n" |> Some
         UI.div [Vertical] [
             Editor.view UI.inputText model.Name |> UI.map NameMsg
             Editor.view (UI.inputDigits []) model.WorkRate |> UI.map WorkRateMsg
             UI.div [Horizontal] [UI.button [isEnabled; Tooltip tooltip] "Save" Save; UI.text [] model.SaveResponse]
-            UI.div [Horizontal] [UI.text [Bold] (Elf.making.Name+":"); UI.text [] making]
+            UI.div [Horizontal] [UI.text [Bold] (Elf.making.Name+":  "); UI.text [] making]
         ]
 
-    let app elf elfEvents toyEvents handler = UI.app (fun () -> init elf) update view (subscription elfEvents toyEvents) handler
+    let app elf elfStore toyStore handler = UI.app (fun () -> init elf) update view (subscription elfStore toyStore) handler
 
 
 module KidList =
@@ -290,17 +306,19 @@ module KidList =
     let init() = [], []
 
     type Msg =
-        | KidName of Kid ID * string
+        | KidName of Map<Kid ID,string>
         | KidRequested of (Kid ID * int) list
         | KidFinished of (Kid ID * int) list
         | OpenEdit of Kid ID option
 
     let update msg model =
         match msg with
-        | KidName (kid,name) ->
-            match List.tryFindIndex (fun r -> r.ID=kid) model with
-            | None -> {ID=kid; Name=name; Requested=0; Finished=0}::model |> List.sortBy (fun r -> r.Name), []
-            | Some i -> List.replacei i {List.item i model with Name=name} model |> List.sortBy (fun r -> r.Name), []
+        | KidName map ->
+            Map.fold (fun model kid name ->
+                match List.tryFindIndex (fun r -> r.ID=kid) model with
+                | None -> {ID=kid; Name=name; Requested=0; Finished=0}::model |> List.sortBy (fun r -> r.Name)
+                | Some i -> List.replacei i {List.item i model with Name=name} model |> List.sortBy (fun r -> r.Name)
+            ) model map, []
         | KidRequested l ->
             List.fold (fun model (kid,requested) ->
                     match List.tryFindIndex (fun r -> r.ID=kid) model with
@@ -320,10 +338,10 @@ module KidList =
         | KidRequested
         | KidFinished
     
-    let subscription kidEvents toyProgress =
+    let subscription kidStore toyProgress =
         let subs =
             Map.ofList [
-                KidName, Query.kidName kidEvents |> Observable.map Msg.KidName
+                KidName, Property.deltaObservable Kid.name kidStore |> Observable.map Msg.KidName
                 KidRequested, Query.kidRequested toyProgress |> Observable.map Msg.KidRequested 
                 KidFinished, Query.kidFinished toyProgress |> Observable.map Msg.KidFinished
             ]
@@ -346,7 +364,7 @@ module KidList =
             ]
         header::List.map rowUI model |> UI.div [Vertical;Width 400]
 
-    let app kidEvents toyProgress handler = UI.app init update view (subscription kidEvents toyProgress) handler
+    let app kidStore toyProgress handler = UI.app init update view (subscription kidStore toyProgress) handler
 
 
 module ToyList =
@@ -356,17 +374,19 @@ module ToyList =
     let init() = [], []
 
     type Msg =
-        | ToyName of Toy ID * string
+        | ToyName of Map<Toy ID,string>
         | ToyRequested of (Toy ID * int) list
         | ToyFinished of (Toy ID * int) list
         | OpenEdit of Toy ID option
 
     let update msg model =
         match msg with
-        | ToyName (toy,name) ->
-            match List.tryFindIndex (fun r -> r.ID=toy) model with
-            | None -> {ID=toy; Name=name; Requested=0; Finished=0}::model |> List.sortBy (fun r -> r.Name), []
-            | Some i -> List.replacei i {List.item i model with Name=name} model |> List.sortBy (fun r -> r.Name), []
+        | ToyName map ->
+            Map.fold (fun model toy name ->
+                match List.tryFindIndex (fun r -> r.ID=toy) model with
+                | None -> {ID=toy; Name=name; Requested=0; Finished=0}::model |> List.sortBy (fun r -> r.Name)
+                | Some i -> List.replacei i {List.item i model with Name=name} model |> List.sortBy (fun r -> r.Name)
+                ) model map, []
         | ToyRequested l ->
             List.fold (fun model (toy,requested) ->
                     match List.tryFindIndex (fun r -> r.ID=toy) model with
@@ -386,10 +406,10 @@ module ToyList =
         | ToyFinished
         | ToyRequested
 
-    let subscription toyEvents toyProgress =
+    let subscription toyStore toyProgress =
         let subs =
             Map.ofList [
-                ToyName, Query.toyName toyEvents |> Observable.map Msg.ToyName
+                ToyName, Property.deltaObservable Toy.name toyStore |> Observable.map Msg.ToyName
                 ToyFinished, Query.toyFinished toyProgress |> Observable.map Msg.ToyFinished
                 ToyRequested, Query.toyRequested toyProgress |> Observable.map Msg.ToyRequested
             ]
@@ -412,7 +432,7 @@ module ToyList =
             ]
         header::List.map rowUI model |> UI.div [Vertical;Width 400]
 
-    let app toyEvents toyProgress handler = UI.app init update view (subscription toyEvents toyProgress) handler
+    let app toyStore toyProgress handler = UI.app init update view (subscription toyStore toyProgress) handler
 
 
 module ElfList =
@@ -444,11 +464,11 @@ module ElfList =
         | ElfUpdate
         | ToyName
 
-    let subscription elfEvents toyEvents =
+    let subscription elfStore toyStore =
         let subs =
             Map.ofList [
-                ElfUpdate, Observable.map Update elfEvents
-                ToyName, Query.toyNames toyEvents |> Observable.map ToyNames
+                ElfUpdate, Observable.map Update elfStore
+                ToyName, Property.fullObservable Toy.name toyStore |> Observable.map ToyNames
             ]
         fun (_:Model) -> subs
 
@@ -468,7 +488,7 @@ module ElfList =
             ]
         header::List.map rowUI model.Rows |> UI.div [Vertical;Width 400]
 
-    let app elfEvents toyEvents handler = UI.app init update view (subscription elfEvents toyEvents) handler
+    let app elfStore toyStore handler = UI.app init update view (subscription elfStore toyStore) handler
 
 
 module Main =
@@ -496,10 +516,10 @@ module Main =
         | ToyList of ToyList.Sub
         | ElfList of ElfList.Sub
     
-    let subscription kidEvents toyEvents elfEvents toyProgress model =
-        KidList.subscription kidEvents toyProgress model.Kid |> Map.toSeq |> Seq.map (fun (k,v) -> KidList k,Observable.map KidMsg v)
-        |> Seq.append (ToyList.subscription toyEvents toyProgress model.Toy |> Map.toSeq |> Seq.map (fun (k,v) -> ToyList k,Observable.map ToyMsg v))
-        |> Seq.append (ElfList.subscription elfEvents toyEvents model.Elf |> Map.toSeq |> Seq.map (fun (k,v) -> ElfList k,Observable.map ElfMsg v))
+    let subscription kidStore toyStore elfStore toyProgress model =
+        KidList.subscription kidStore toyProgress model.Kid |> Map.toSeq |> Seq.map (fun (k,v) -> KidList k,Observable.map KidMsg v)
+        |> Seq.append (ToyList.subscription toyStore toyProgress model.Toy |> Map.toSeq |> Seq.map (fun (k,v) -> ToyList k,Observable.map ToyMsg v))
+        |> Seq.append (ElfList.subscription elfStore toyStore model.Elf |> Map.toSeq |> Seq.map (fun (k,v) -> ElfList k,Observable.map ElfMsg v))
         |> Map.ofSeq
 
     let view model =
@@ -509,5 +529,5 @@ module Main =
             ElfList.view model.Elf |> UI.map ElfMsg
         ]
 
-    let app kidEvents toyEvents elfEvents toyProgress handler =
-        UI.app init update view (subscription kidEvents toyEvents elfEvents toyProgress) handler
+    let app kidStore toyStore elfStore toyProgress handler =
+        UI.app init update view (subscription kidStore toyStore elfStore toyProgress) handler
