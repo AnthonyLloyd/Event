@@ -289,7 +289,7 @@ module ElfEdit =
         |> Map.ofList
 
     let view model =
-        let making = Option.bind (fun tid -> Map.tryFind tid model.ToyNames) model.Making |> Option.getElse "Nothing"
+        let making = Option.bind (fun toy -> Map.tryFind toy model.ToyNames) model.Making |> Option.getElse "Nothing"
         let isEnabled = Result.isOk model.SaveValidation |> IsEnabled
         let tooltip = match model.SaveValidation with | Ok () | Error [] -> None | Error l -> List.rev l |> Seq.map snd |> String.join "\n" |> Some
         UI.div [Vertical] [
@@ -303,37 +303,22 @@ module ElfEdit =
 
 
 module KidList =
-    type Row = {ID:Kid ID; Name:string; Requested:int; Finished:int}
-    type Model = Row list
 
-    let init() = [], []
+    type Model = {Name:Map<Kid ID,string>; Requested:Map<Kid ID,int>; Finished:Map<Kid ID,int>}
+
+    let init() = {Name=Map.empty; Requested=Map.empty; Finished=Map.empty}, []
 
     type Msg =
         | KidName of Map<Kid ID,string>
-        | KidRequested of (Kid ID * int) list
-        | KidFinished of (Kid ID * int) list
+        | KidRequested of Map<Kid ID,int>
+        | KidFinished of Map<Kid ID,int>
         | OpenEdit of Kid ID option
 
-    let update msg model =
+    let update msg (model:Model) =
         match msg with
-        | KidName map ->
-            Map.fold (fun model kid name ->
-                match List.tryFindIndex (fun r -> r.ID=kid) model with
-                | None -> {ID=kid; Name=name; Requested=0; Finished=0}::model |> List.sortBy (fun r -> r.Name)
-                | Some i -> List.replacei i {List.item i model with Name=name} model |> List.sortBy (fun r -> r.Name)
-            ) model map, []
-        | KidRequested l ->
-            List.fold (fun model (kid,requested) ->
-                    match List.tryFindIndex (fun r -> r.ID=kid) model with
-                    | None -> {ID=kid; Name=String.empty; Requested=requested; Finished=0}::model
-                    | Some i -> List.replacei i {List.item i model with Requested=requested} model
-                ) model l, []
-        | KidFinished l ->
-            List.fold (fun model (kid,finished) ->
-                    match List.tryFindIndex (fun r -> r.ID=kid) model with
-                    | None -> {ID=kid; Name=String.empty; Requested=0; Finished=finished}::model
-                    | Some i -> List.replacei i {List.item i model with Finished=finished} model
-                ) model l, []
+        | KidName n -> {model with Name=n}, []
+        | KidRequested r -> {model with Requested=r}, []
+        | KidFinished f -> {model with Finished=f}, []
         | OpenEdit kid -> model, [OpenKidEdit kid]
 
     type Sub =
@@ -344,13 +329,13 @@ module KidList =
     let subscription kidStore toyProgress =
         let subs =
             Map.ofList [
-                KidName, Property.deltaObservable Kid.name kidStore |> Observable.map Msg.KidName
+                KidName, Property.fullObservable Kid.name kidStore |> Observable.map Msg.KidName
                 KidRequested, Query.kidRequested toyProgress |> Observable.map Msg.KidRequested 
                 KidFinished, Query.kidFinished toyProgress |> Observable.map Msg.KidFinished
             ]
         fun (_:Model) -> subs
 
-    let view model =
+    let view (model:Model) =
         let header =
             UI.div [Horizontal] [
                 UI.text [Bold; TextColour Red; Width 150] "Kid"
@@ -358,50 +343,36 @@ module KidList =
                 UI.text [Bold; TextColour Red; Width 70] "Finished"
                 UI.button [Width 50] "new" (OpenEdit None)
             ]
-        let rowUI row =
+        let rowUI (kid,name) =
             UI.div [Horizontal] [
-                UI.text [Width 150] row.Name
-                UI.text [Width 70] (string row.Requested)
-                UI.text [Width 70] (string row.Finished)
-                UI.button [Width 50] "edit" (OpenEdit (Some row.ID))
+                UI.text [Width 150] name
+                UI.text [Width 70] (Map.tryFind kid model.Requested |> Option.getElse 0 |> string)
+                UI.text [Width 70] (Map.tryFind kid model.Finished |> Option.getElse 0 |> string)
+                UI.button [Width 50] "edit" (OpenEdit (Some kid))
             ]
-        header::List.map rowUI model |> UI.div [Vertical;Width 400]
+        let kids = Map.toList model.Name |> List.sortBy snd
+        header::List.map rowUI kids |> UI.div [Vertical;Width 400]
 
     let app kidStore toyProgress handler = UI.app init update view (subscription kidStore toyProgress) handler
 
 
 module ToyList =
-    type Row = {ID:Toy ID; Name:string; Requested:int; Finished:int}
-    type Model = Row list
 
-    let init() = [], []
+    type Model = {Name:Map<Toy ID,string>; Requested:Map<Toy ID,int>; Finished:Map<Toy ID,int>}
+
+    let init() = {Name=Map.empty; Requested=Map.empty; Finished=Map.empty}, []
 
     type Msg =
         | ToyName of Map<Toy ID,string>
-        | ToyRequested of (Toy ID * int) list
-        | ToyFinished of (Toy ID * int) list
+        | ToyRequested of Map<Toy ID,int>
+        | ToyFinished of Map<Toy ID,int>
         | OpenEdit of Toy ID option
 
-    let update msg model =
+    let update msg (model:Model) =
         match msg with
-        | ToyName map ->
-            Map.fold (fun model toy name ->
-                match List.tryFindIndex (fun r -> r.ID=toy) model with
-                | None -> {ID=toy; Name=name; Requested=0; Finished=0}::model |> List.sortBy (fun r -> r.Name)
-                | Some i -> List.replacei i {List.item i model with Name=name} model |> List.sortBy (fun r -> r.Name)
-                ) model map, []
-        | ToyRequested l ->
-            List.fold (fun model (toy,requested) ->
-                    match List.tryFindIndex (fun r -> r.ID=toy) model with
-                    | None -> {ID=toy; Name=String.empty; Requested=requested; Finished=0}::model
-                    | Some i -> List.replacei i {List.item i model with Requested=requested} model
-                ) model l, []
-        | ToyFinished l ->
-            List.fold (fun model (toy,finished) ->
-                    match List.tryFindIndex (fun r -> r.ID=toy) model with
-                    | None -> {ID=toy; Name=String.empty; Requested=0; Finished=finished}::model
-                    | Some i -> List.replacei i {List.item i model with Finished=finished} model
-                ) model l, []
+        | ToyName n -> {model with Name=n}, []
+        | ToyRequested r -> {model with Requested=r}, []
+        | ToyFinished f -> {model with Finished=f}, []
         | OpenEdit toy -> model, [OpenToyEdit toy]
 
     type Sub =
@@ -412,13 +383,13 @@ module ToyList =
     let subscription toyStore toyProgress =
         let subs =
             Map.ofList [
-                ToyName, Property.deltaObservable Toy.name toyStore |> Observable.map Msg.ToyName
+                ToyName, Property.fullObservable Toy.name toyStore |> Observable.map Msg.ToyName
                 ToyFinished, Query.toyFinished toyProgress |> Observable.map Msg.ToyFinished
                 ToyRequested, Query.toyRequested toyProgress |> Observable.map Msg.ToyRequested
             ]
         fun (_:Model) -> subs
 
-    let view model =
+    let view (model:Model) =
         let header =
             UI.div [Horizontal] [
                 UI.text [Bold; TextColour Red; Width 150] "Toy"
@@ -426,61 +397,48 @@ module ToyList =
                 UI.text [Bold; TextColour Red; Width 70] "Finished"
                 UI.button [Width 50] "new" (OpenEdit None)
             ]
-        let rowUI row =
+        let rowUI (toy,name) =
             UI.div [Horizontal] [
-                UI.text [Width 150] row.Name
-                UI.text [Width 70] (string row.Requested)
-                UI.text [Width 70] (string row.Finished)
-                UI.button [Width 50] "edit" (OpenEdit (Some row.ID))
+                UI.text [Width 150] name
+                UI.text [Width 70] (Map.tryFind toy model.Requested |> Option.getElse 0 |> string)
+                UI.text [Width 70] (Map.tryFind toy model.Finished |> Option.getElse 0 |> string)
+                UI.button [Width 50] "edit" (OpenEdit (Some toy))
             ]
-        header::List.map rowUI model |> UI.div [Vertical;Width 400]
+        let toys = Map.toList model.Name |> List.sortBy snd
+        header::List.map rowUI toys |> UI.div [Vertical;Width 400]
 
     let app toyStore toyProgress handler = UI.app init update view (subscription toyStore toyProgress) handler
 
 
 module ElfList =
-    type Row = {ID:Elf ID; Name:string; Making:Toy ID option}
-    type Model = {Rows:Row list; ToyNames:Map<Toy ID,string>}
+    
+    type Model = {Name:Map<Elf ID,string>; Making:Map<Elf ID,Toy ID option>; ToyNames:Map<Toy ID,string>}
 
-    let init() = {Rows=[]; ToyNames=Map.empty}, []
+    let init() = {Name=Map.empty; Making=Map.empty; ToyNames=Map.empty}, []
 
     type Msg =
-        | Update of Map<Elf ID,Elf Events>
+        | ElfName of Map<Elf ID,string>
+        | ElfMaking of Map<Elf ID,Toy ID option>
         | ToyNames of Map<Toy ID,string>
         | OpenEdit of Elf ID option
 
-    let update msg model =
+    let update msg (model:Model) =
         match msg with
-        | Update map ->
-            Map.fold (fun model elf events ->
-                match List.tryFindIndex (fun r -> r.ID=elf) model.Rows with
-                | None ->
-                    let row = {
-                        ID = elf
-                        Name = Property.get Elf.name events |> Option.getElse String.empty
-                        Making = Property.get Elf.making events |> Option.getElse None
-                        }
-                    {model with Rows = row::model.Rows |> List.sortBy (fun r -> r.Name)}
-                | Some i ->
-                    let oldRow = List.item i model.Rows
-                    let row = {
-                        ID = elf
-                        Name = Property.get Elf.name events |> Option.getElse oldRow.Name
-                        Making = Property.get Elf.making events |> Option.getElse oldRow.Making
-                        }
-                    {model with Rows = List.replacei i row model.Rows |> List.sortBy (fun r -> r.Name)}
-            ) model map, []
+        | ElfName n -> {model with Name=n}, []
+        | ElfMaking m -> {model with Making=m}, []
         | ToyNames m -> {model with ToyNames=m}, []
         | OpenEdit elf -> model, [OpenElfEdit elf]
 
     type Sub =
-        | ElfUpdate
+        | ElfNames
+        | ElfMaking
         | ToyName
 
     let subscription elfStore toyStore =
         let subs =
             Map.ofList [
-                ElfUpdate, Store.observable elfStore |> Observable.map Update
+                ElfNames, Property.fullObservable Elf.name elfStore |> Observable.map ElfName
+                ElfMaking, Property.fullObservable Elf.making elfStore |> Observable.map Msg.ElfMaking
                 ToyName, Property.fullObservable Toy.name toyStore |> Observable.map ToyNames
             ]
         fun (_:Model) -> subs
@@ -492,14 +450,17 @@ module ElfList =
                 UI.text [Bold; TextColour Red; Width 140] "Making"
                 UI.button [Width 50] "new" (OpenEdit None)
             ]
-        let rowUI row =
-            let making = Option.bind (fun tid -> Map.tryFind tid model.ToyNames) row.Making |> Option.getElse String.empty
+        let rowUI (elf,name) =
+            let making = Map.tryFind elf model.Making
+                         |> Option.bind (Option.bind (fun toy -> Map.tryFind toy model.ToyNames))
+                         |> Option.getElse String.empty
             UI.div [Horizontal] [
-                UI.text [Width 180] row.Name
+                UI.text [Width 180] name
                 UI.text [Width 140] making
-                UI.button [Width 50] "edit" (OpenEdit (Some row.ID))
+                UI.button [Width 50] "edit" (OpenEdit (Some elf))
             ]
-        header::List.map rowUI model.Rows |> UI.div [Vertical;Width 400]
+        let elfs = Map.toList model.Name |> List.sortBy snd
+        header::List.map rowUI elfs |> UI.div [Vertical;Width 400]
 
     let app elfStore toyStore handler = UI.app init update view (subscription elfStore toyStore) handler
 

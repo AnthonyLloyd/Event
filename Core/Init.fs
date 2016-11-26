@@ -71,9 +71,6 @@ module Map =
     let incr m k = Map.add k (Map.tryFind k m |> Option.getElse 0 |> (+)1) m
     let decr m k = Map.add k (Map.tryFind k m |> Option.getElse 0 |> (+) -1) m
     let addOrRemove k o m = match o with | Some v -> Map.add k v m | None -> Map.remove k m
-    let revisions before after =
-        let after = Map.fold (fun after k _ -> if Map.containsKey k after then after else Map.add k 0 after) after before
-        Map.filter (fun k v -> Map.tryFind k before |> Option.getElse (LanguagePrimitives.GenericZero) <> v) after
     let choose chooser map =
         Map.filter (fun k v -> chooser k v |> Option.isSome) map
         |> Map.map (fun k v -> chooser k v |> Option.get)

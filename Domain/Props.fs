@@ -131,35 +131,14 @@ module Query =
         |> Observable.map (fun (f,r,a,b,w) -> progress f r a b w)
 
 
-    let kidRequested toyProgress : IObservable<(Kid ID * int) list> =
-        toyProgress
-        |> Observable.scan (fun (_,before) after -> before,after) (Map.empty,Map.empty)
-        |> Observable.map (fun (before,after) ->
-            let requested map = Map.toSeq map |> Seq.collect (fun (_,(f,o)) -> Seq.append f o) |> Seq.countBy snd |> Map.ofSeq
-            Map.revisions (requested before) (requested after) |> Map.toList)
+    let kidRequested toyProgress : IObservable<Map<Kid ID,int>> =
+        Observable.map (Map.toSeq >> Seq.collect (fun (_,(f,o)) -> Seq.append f o) >> Seq.countBy snd >> Map.ofSeq) toyProgress
 
-    let kidFinished toyProgress : IObservable<(Kid ID * int) list> =
-        toyProgress
-        |> Observable.scan (fun (_,before) after -> before,after) (Map.empty,Map.empty)
-        |> Observable.map (fun (before,after) ->
-            let finished map = Map.toSeq map |> Seq.collect (snd>>fst) |> Seq.countBy snd |> Map.ofSeq
-            Map.revisions (finished before) (finished after) |> Map.toList)
+    let kidFinished toyProgress : IObservable<Map<Kid ID,int>> =
+        Observable.map (Map.toSeq >> Seq.collect (snd>>fst) >> Seq.countBy snd >> Map.ofSeq) toyProgress
 
-    let toyRequested toyProgress : IObservable<(Toy ID * int) list> =
-        toyProgress
-        |> Observable.scan (fun (_,before) after -> before,after) (Map.empty,Map.empty)
-        |> Observable.map (fun (before,after) ->
-            let requested map = Map.map (fun _ (f,o) -> List.length f + List.length o) map
-            Map.revisions (requested before) (requested after) |> Map.toList)
+    let toyRequested toyProgress : IObservable<Map<Toy ID,int>> =
+        Observable.map (Map.map (fun _ (f,o) -> List.length f + List.length o)) toyProgress
 
-    let toyFinished toyProgress : IObservable<(Toy ID * int) list> =
-        toyProgress
-        |> Observable.scan (fun (_,before) after -> before,after) (Map.empty,Map.empty)
-        |> Observable.map (fun (before,after) ->
-            let finished map = Map.map (fun _ (f,_) -> List.length f) map
-            Map.revisions (finished before) (finished after) |> Map.toList)
-
-    let toysOutstanding toyProgress : IObservable<((Behaviour * EventID) * Toy ID) list> =
-        toyProgress
-        |> Observable.map (fun m ->
-            Map.toSeq m |> Seq.collect (snd>>snd) |> Seq.sort |> Seq.toList)
+    let toyFinished toyProgress : IObservable<Map<Toy ID,int>> =
+        Observable.map (Map.map (fun _ (f,_) -> List.length f)) toyProgress
