@@ -56,18 +56,18 @@ type StoreError =
 [<NoEquality;NoComparison>]
 type 'Aggregate MemoryStore =
     {
-        Updates: Map<'Aggregate ID,'Aggregate Events>
+        Latest: Map<'Aggregate ID,'Aggregate Events>
         Observers: IObserver<Map<'Aggregate ID,'Aggregate Events>> list
     }
 
 module MemoryStore =
-    let empty = {Updates=Map.empty; Observers=[]}
+    let empty = {Latest=Map.empty; Observers=[]}
 
     let observable (store:'Aggregate MemoryStore ref) =
         {new IObservable<_> with
             member __.Subscribe(ob:IObserver<_>) =
                 let _,newStore = atomicUpdate (fun i -> {i with Observers=ob::i.Observers}) store
-                ob.OnNext newStore.Updates
+                ob.OnNext newStore.Latest
                 {new IDisposable with
                     member __.Dispose() =
                         atomicUpdate (fun i -> {i with Observers=List.where ((<>)ob) i.Observers}) store |> ignore
@@ -77,10 +77,10 @@ module MemoryStore =
     let update (user:UserID) (aggregateID:'Aggregate ID) (updates:'Aggregate list1) (lastEvent:EventID) (store:'Aggregate MemoryStore ref) =
         let newStore, result =
             atomicUpdateQuery (fun store ->
-                let l = Map.find aggregateID store.Updates
+                let l = Map.find aggregateID store.Latest
                 if List1.head l |> fst = lastEvent then
                     let eventID = EventID.gen user
-                    {store with Updates=Map.add aggregateID (List1.init (eventID,updates) (List1.toList l)) store.Updates}, Ok eventID
+                    {store with Latest=Map.add aggregateID (List1.init (eventID,updates) (List1.toList l)) store.Latest}, Ok eventID
                 else store, Error Concurrency
             ) store
         match result with
@@ -94,7 +94,7 @@ module MemoryStore =
             atomicUpdateQuery (fun store ->
                 let eventID = EventID.gen user
                 let aggregateID = ID.gen eventID
-                {store with Updates=Map.add aggregateID (List1.singleton (eventID,updates)) store.Updates}, Ok aggregateID
+                {store with Latest=Map.add aggregateID (List1.singleton (eventID,updates)) store.Latest}, Ok aggregateID
             ) store
         match result with
         | Ok aggregateID ->
@@ -119,9 +119,9 @@ module Store =
     let create (user:UserID) (updates:'Aggregate list1) (store:'Aggregate Store) =
         match store with
         | MemoryStore store -> MemoryStore.create user updates store
-    let getAll (store:'Aggregate Store) =
+    let latest (store:'Aggregate Store) =
         match store with
-        | MemoryStore store -> store.Value.Updates
+        | MemoryStore store -> store.Value.Latest
 
 type 'a SetEvent =
     | SetAdd of 'a

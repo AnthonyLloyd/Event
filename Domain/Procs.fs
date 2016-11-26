@@ -18,11 +18,11 @@ module Procs =
                     List.item i l |> Some
             
             maybe {
-                let! kid,kidEvents = Store.getAll kidStore |> Map.toList |> randPick
+                let! kid,kidEvents = Store.latest kidStore |> Map.toList |> randPick
                 let! age = Property.get Kid.age kidEvents
 
                 let toyAgeRange =
-                    Store.getAll toyStore |> Map.choose (fun _ -> Property.get Toy.ageRange)
+                    Store.latest toyStore |> Map.choose (fun _ -> Property.get Toy.ageRange)
                     |> Map.filter (fun _ (lo,hi) -> between lo hi age)
 
                 let wishList =
@@ -70,12 +70,12 @@ module Procs =
 
     let santaRun toyStore elfStore toyProgress =
         let run() =
-            let elfEvents = Store.getAll elfStore
+            let elfEvents = Store.latest elfStore
 
             let elfToyFinishTime =
 
                 let toyWorkRequired =
-                    Store.getAll toyStore
+                    Store.latest toyStore
                     |> Map.choose (fun _ -> Property.get Toy.workRequired)
 
                 let elfWorkRate =
