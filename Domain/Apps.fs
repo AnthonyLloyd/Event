@@ -56,11 +56,12 @@ module KidEdit =
         | WishListMsg of Toy ID EditorSet.Msg
         | Save
         | CreateResult of Result<Kid ID,StoreError>
-        | UpdateResult of Result<unit,StoreError>
+        | UpdateResult of Result<EventID,StoreError>
 
     let update msg model =
         match msg with
         | Update l ->
+            let l = match model.Latest with | None -> l | Some l2 -> Events.append l l2
             let model = {model with
                             Latest = Some l
                             Name = Editor.eventUpdate Kid.name l model.Name
@@ -88,7 +89,7 @@ module KidEdit =
                 |> Option.toList
             (if List.isEmpty cmd then model else {model with SaveResponse="Saving..."}), cmd
         | CreateResult (Ok kid) -> {model with ID=Some kid; SaveResponse="Saved"}, []
-        | UpdateResult (Ok ()) -> {model with SaveResponse="Saved"}, []
+        | UpdateResult (Ok _) -> {model with SaveResponse="Saved"}, []
         | CreateResult (Error StoreError.Concurrency)
         | UpdateResult (Error StoreError.Concurrency) ->
             {model with SaveResponse="Update happened during save, please retry"}, []
@@ -159,11 +160,12 @@ module ToyEdit =
         | WorkMsg of uint16 Editor.Msg
         | Save
         | CreateResult of Result<Toy ID,StoreError>
-        | UpdateResult of Result<unit,StoreError>
+        | UpdateResult of Result<EventID,StoreError>
 
     let update msg model =
         match msg with
         | Update l ->
+            let l = match model.Latest with | None -> l | Some l2 -> Events.append l l2
             let model = {model with
                             Latest = Some l
                             Name = Editor.eventUpdate Toy.name l model.Name
@@ -184,7 +186,7 @@ module ToyEdit =
                             |> Option.map (addSnd (model.ID, model.Latest))
                             |> Option.toList
         | CreateResult (Ok toy) -> {model with ID=Some toy; SaveResponse="Saved"}, []
-        | UpdateResult (Ok ()) -> {model with SaveResponse="Saved"}, []
+        | UpdateResult (Ok _) -> {model with SaveResponse="Saved"}, []
         | CreateResult (Error StoreError.Concurrency)
         | UpdateResult (Error StoreError.Concurrency) ->
             {model with SaveResponse="Update happened during save, please retry"}, []
@@ -248,11 +250,12 @@ module ElfEdit =
         | WorkRateMsg of Work Editor.Msg
         | Save
         | CreateResult of Result<Elf ID,StoreError>
-        | UpdateResult of Result<unit,StoreError>
+        | UpdateResult of Result<EventID,StoreError>
 
     let update msg model =
         match msg with
         | Update l ->
+            let l = match model.Latest with | None -> l | Some l2 -> Events.append l l2
             let model = {model with
                             Latest = Some l
                             Name = Editor.eventUpdate Elf.name l model.Name
@@ -271,7 +274,7 @@ module ElfEdit =
                             |> Option.map (addSnd (model.ID, model.Latest))
                             |> Option.toList
         | CreateResult (Ok toy) -> {model with ID=Some toy; SaveResponse="Saved"}, []
-        | UpdateResult (Ok ()) -> {model with SaveResponse="Saved"}, []
+        | UpdateResult (Ok _) -> {model with SaveResponse="Saved"}, []
         | CreateResult (Error StoreError.Concurrency)
         | UpdateResult (Error StoreError.Concurrency) ->
             {model with SaveResponse="Update happened during save, please retry"}, []
@@ -442,23 +445,33 @@ module ElfList =
     let init() = {Rows=[]; ToyNames=Map.empty}, []
 
     type Msg =
-        | Update of Elf ID * Elf Events
+        | Update of Map<Elf ID,Elf Events>
         | ToyNames of Map<Toy ID,string>
         | OpenEdit of Elf ID option
 
     let update msg model =
         match msg with
-        | Update (eid,events) ->
-            let createRow() = {
-                ID = eid
-                Name = Property.get Elf.name events |> Option.getElse String.empty
-                Making = Property.get Elf.making events |> Option.getElse None
-            }
-            match List.tryFindIndex (fun r -> r.ID=eid) model.Rows with
-            | None -> {model with Rows = createRow()::model.Rows |> List.sortBy (fun r -> r.Name)}, []
-            | Some i -> {model with Rows = List.replacei i (createRow()) model.Rows |> List.sortBy (fun r -> r.Name)}, []
+        | Update map ->
+            Map.fold (fun model elf events ->
+                match List.tryFindIndex (fun r -> r.ID=elf) model.Rows with
+                | None ->
+                    let row = {
+                        ID = elf
+                        Name = Property.get Elf.name events |> Option.getElse String.empty
+                        Making = Property.get Elf.making events |> Option.getElse None
+                        }
+                    {model with Rows = row::model.Rows |> List.sortBy (fun r -> r.Name)}
+                | Some i ->
+                    let oldRow = List.item i model.Rows
+                    let row = {
+                        ID = elf
+                        Name = Property.get Elf.name events |> Option.getElse oldRow.Name
+                        Making = Property.get Elf.making events |> Option.getElse oldRow.Making
+                        }
+                    {model with Rows = List.replacei i row model.Rows |> List.sortBy (fun r -> r.Name)}
+            ) model map, []
         | ToyNames m -> {model with ToyNames=m}, []
-        | OpenEdit eid -> model, [OpenElfEdit eid]
+        | OpenEdit elf -> model, [OpenElfEdit elf]
 
     type Sub =
         | ElfUpdate
@@ -467,7 +480,7 @@ module ElfList =
     let subscription elfStore toyStore =
         let subs =
             Map.ofList [
-                ElfUpdate, Observable.map Update elfStore
+                ElfUpdate, Store.deltaObservable elfStore |> Observable.map Update
                 ToyName, Property.fullObservable Toy.name toyStore |> Observable.map ToyNames
             ]
         fun (_:Model) -> subs

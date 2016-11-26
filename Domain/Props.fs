@@ -61,22 +61,6 @@ module Kid =
 
 module Query =
 
-    let kidWishListEvent (kidStore:Kid Store) : IObservable<Map<Kid ID,Map<Toy ID,EventID>>> =
-        Store.deltaObservable kidStore
-        |> Observable.choose (fun (map:Map<Kid ID,Kid Events>) ->
-            Map.toList map
-            |> List.choose (fun (kid,events) ->
-                    List1.tryCollect (fun (eid,l)  -> List1.tryChoose Kid.wishList.Getter l |> Option.map (List1.map (function |SetAdd toy -> MapAdd (toy,eid) |SetRemove toy -> MapRemove toy))) events
-                    |> Option.map (addFst kid)
-                )
-            |> List1.tryOfList
-           )
-        |> Observable.scan (
-            List1.fold (fun map (kid,mapEvents) ->
-                let newMap = Map.tryFind kid map |> Option.getElse Map.empty |> MapEvent.update mapEvents
-                Map.add kid newMap map)
-           ) Map.empty
-
     let toyProgress (kidStore:Kid Store) (toyStore:Toy Store) (elfStore:Elf Store) =
 
         let toyFinished (elfStore:Elf Store) =
@@ -91,6 +75,22 @@ module Query =
                     let toyUpdate = Map.toSeq making |> Seq.map snd |> Seq.fold Map.decr total
                     (newTotal,newMaking),toyUpdate) ((Map.empty,Map.empty),Map.empty)
             |> Observable.map snd
+
+        let kidWishListEvent (kidStore:Kid Store) : IObservable<Map<Kid ID,Map<Toy ID,EventID>>> =
+            Store.deltaObservable kidStore
+            |> Observable.choose (fun (map:Map<Kid ID,Kid Events>) ->
+                Map.toList map
+                |> List.choose (fun (kid,events) ->
+                        List1.tryCollect (fun (eid,l)  -> List1.tryChoose Kid.wishList.Getter l |> Option.map (List1.map (function |SetAdd toy -> MapAdd (toy,eid) |SetRemove toy -> MapRemove toy))) events
+                        |> Option.map (addFst kid)
+                    )
+                |> List1.tryOfList
+               )
+            |> Observable.scan (
+                List1.fold (fun map (kid,mapEvents) ->
+                    let newMap = Map.tryFind kid map |> Option.getElse Map.empty |> MapEvent.update mapEvents
+                    Map.add kid newMap map)
+               ) Map.empty
 
         let progress (finished:Map<Toy ID,int>) (ageRanges:Map<Toy ID,Age*Age>) (ages:Map<Kid ID,Age>) (behaviours:Map<Kid ID,Behaviour>) (wishListEvents:Map<Kid ID,Map<Toy ID,EventID>>) =
 

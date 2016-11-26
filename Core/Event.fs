@@ -47,6 +47,8 @@ type 'Aggregate Events = (EventID * 'Aggregate list1) list1
 module Events =
     let lasteEventID (events:'Aggregate Events) =
         List1.head events |> fst
+    let append (events1:'a Events) (events2:'a Events) =
+        List1.append events1 events2
 
 type StoreError =
     | Concurrency
@@ -122,9 +124,9 @@ type 'Aggregate Store =
 module Store =
     let emptyMemoryStore() = MemoryStore.empty |> ref |> MemoryStore
     /// Returns the full store state on each update.
-    let observable (store:'Aggregate Store) =
-        match store with
-        | MemoryStore store -> MemoryStore.fullObservable store
+//    let observable (store:'Aggregate Store) =
+//        match store with
+//        | MemoryStore store -> MemoryStore.fullObservable store
     /// Returns the full store state and then subsequent changes.
     let deltaObservable (store:'Aggregate Store) =
         match store with

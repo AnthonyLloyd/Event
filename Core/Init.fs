@@ -92,6 +92,7 @@ module List1 =
         match List.choose chooser list with | [] -> None | l -> List1 l |> Some
     let tryCollect mapping (List1 list) =
         List.choose mapping list |> List.collect toList |> tryOfList
+    let append (List1 l1) (List1 l2) = List1(l1@l2)
 
 module Observable =
     let collect mapping (o:IObservable<_>) =
