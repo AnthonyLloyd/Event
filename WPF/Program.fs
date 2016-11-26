@@ -17,6 +17,7 @@ let main _ =
     let rand = Random()
 
     let kidStore =
+        StringOverride.F <- Some (function | Good -> "Good" | Mixed -> "Mixed" | Bad -> "Bad")
         let store = Store.emptyMemoryStore()
         let randomAge() = rand.Next 17 |> byte |> Kid.Age
         let randomBehaviour() = Kid.Behaviour <| match rand.Next 3 with |0->Bad|1->Mixed|_->Good

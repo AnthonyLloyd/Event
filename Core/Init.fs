@@ -36,6 +36,13 @@ module String =
         let mutable r = Unchecked.defaultof<_>
         if (^a : (static member TryParse: string * ^a byref -> bool) (s, &r)) then Some r else None
 
+type 'a StringOverride() =
+    [<DefaultValue>]
+    static val mutable private f : ('a -> string) option
+    static member F
+        with get() = StringOverride<'a>.f
+        and set(x:('a->string) option) = StringOverride<'a>.f <- x
+
 module Option =
     let getElse v o = match o with | None -> v | Some i -> i
     let getElseFun f o = match o with | None -> f() | Some i -> i
@@ -242,4 +249,7 @@ module Common =
     let inline mapSnd f (a,b) = a,f b
     let inline addFst a b = a,b
     let inline addSnd a b = b,a
-    
+    let string (v:'a) =
+        match StringOverride<'a>.F with
+        | Some f -> f v
+        | None -> string(v:>obj)

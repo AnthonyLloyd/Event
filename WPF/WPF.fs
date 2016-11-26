@@ -77,21 +77,27 @@ let CreateNaiveUI (root:ContentControl) =
             upcast c
 
     let updateTextBlock =
-        let reset (tb:TextBlock) (c,w) =
+        let deferreds = System.Collections.Generic.Dictionary<_,_>()
+        let reset (tb:TextBlock) c w =
             root.Dispatcher.Invoke (fun () ->
                 tb.Foreground <- c
                 tb.FontWeight <- w
             )
-        let resetDeferred = memoizeWeak (fun tb -> deferred (reset tb) (TimeSpan.FromMilliseconds 2000.0))
+            deferreds.Remove(tb) |> ignore
         fun (tb:TextBlock) (t:string) ->
             if String.IsNullOrEmpty tb.Text |> not
             && String.IsNullOrEmpty t |> not
-            && tb.Text<>t
-            && tb.Foreground <> (Brushes.Green :> Brush) then
-                let before = tb.Foreground,tb.FontWeight
-                tb.Foreground <- Brushes.Green
-                tb.FontWeight <- FontWeights.Bold
-                resetDeferred tb before
+            && tb.Text<>t then
+                match deferreds.TryGetValue tb with
+                | false,_ ->
+                    let c = tb.Foreground
+                    let w = tb.FontWeight
+                    let d = deferred (fun () -> reset tb c w) (TimeSpan.FromMilliseconds 2000.0)
+                    deferreds.[tb] <- d
+                    tb.Foreground <- Brushes.Green
+                    tb.FontWeight <- FontWeights.Bold
+                    d()
+                | true,d -> d()
             tb.Text <- t
 
     let updateTextBox =

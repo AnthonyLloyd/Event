@@ -58,13 +58,12 @@ type 'Aggregate MemoryStore =
     {
         Updates: Map<'Aggregate ID,'Aggregate Events>
         Observers: IObserver<Map<'Aggregate ID,'Aggregate Events>> list
-        DeltaObservers: IObserver<Map<'Aggregate ID,'Aggregate Events>> list
     }
 
 module MemoryStore =
-    let empty = {Updates=Map.empty; Observers=[]; DeltaObservers=[]}
+    let empty = {Updates=Map.empty; Observers=[]}
 
-    let fullObservable (store:'Aggregate MemoryStore ref) =
+    let observable (store:'Aggregate MemoryStore ref) =
         {new IObservable<_> with
             member __.Subscribe(ob:IObserver<_>) =
                 let _,newStore = atomicUpdate (fun i -> {i with Observers=ob::i.Observers}) store
@@ -72,17 +71,6 @@ module MemoryStore =
                 {new IDisposable with
                     member __.Dispose() =
                         atomicUpdate (fun i -> {i with Observers=List.where ((<>)ob) i.Observers}) store |> ignore
-                }
-            }
-
-    let deltaObservable (store:'Aggregate MemoryStore ref) =
-        {new IObservable<_> with
-            member __.Subscribe(ob:IObserver<_>) =
-                let _,newStore = atomicUpdate (fun i -> {i with DeltaObservers=ob::i.DeltaObservers}) store
-                ob.OnNext newStore.Updates
-                {new IDisposable with
-                    member __.Dispose() =
-                        atomicUpdate (fun i -> {i with DeltaObservers=List.where ((<>)ob) i.DeltaObservers}) store |> ignore
                 }
             }
 
@@ -97,8 +85,7 @@ module MemoryStore =
             ) store
         match result with
         | Ok eventID ->
-            newStore.DeltaObservers |> Seq.iter (fun ob -> Map.add aggregateID (List1.singleton (eventID,updates)) Map.empty |> ob.OnNext)
-            newStore.Observers |> Seq.iter (fun ob -> ob.OnNext newStore.Updates)
+            newStore.Observers |> Seq.iter (fun ob -> Map.add aggregateID (List1.singleton (eventID,updates)) Map.empty |> ob.OnNext)
             result
         | _ -> result
 
@@ -111,8 +98,7 @@ module MemoryStore =
             ) store
         match result with
         | Ok aggregateID ->
-            newStore.DeltaObservers |> Seq.iter (fun ob -> Map.add aggregateID (List1.singleton (ID.eventID aggregateID,updates)) Map.empty |> ob.OnNext)
-            newStore.Observers |> Seq.iter (fun ob -> ob.OnNext newStore.Updates)
+            newStore.Observers |> Seq.iter (fun ob -> Map.add aggregateID (List1.singleton (ID.eventID aggregateID,updates)) Map.empty |> ob.OnNext)
             result
         | _ -> result
 
@@ -123,14 +109,10 @@ type 'Aggregate Store =
 
 module Store =
     let emptyMemoryStore() = MemoryStore.empty |> ref |> MemoryStore
-    /// Returns the full store state on each update.
-//    let observable (store:'Aggregate Store) =
-//        match store with
-//        | MemoryStore store -> MemoryStore.fullObservable store
     /// Returns the full store state and then subsequent changes.
-    let deltaObservable (store:'Aggregate Store) =
+    let observable (store:'Aggregate Store) =
         match store with
-        | MemoryStore store -> MemoryStore.deltaObservable store
+        | MemoryStore store -> MemoryStore.observable store
     let update (user:UserID) (aggregateID:'Aggregate ID) (updates:'Aggregate list1) (lastEvent:EventID) (store:'Aggregate Store) =
         match store with
         | MemoryStore store -> MemoryStore.update user aggregateID updates lastEvent store
@@ -209,7 +191,7 @@ module Property =
                 | Some events -> List1.cons update events
             view proposed
     let deltaObservable property store =
-        Store.deltaObservable store
+        Store.observable store
         |> Observable.choose (Map.choose (fun _ -> get property) >> Option.ofMap)
     let fullObservable property store =
         deltaObservable property store |> Observable.scan (Map.fold (fun m k v -> Map.add k v m)) Map.empty

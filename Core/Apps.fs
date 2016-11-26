@@ -34,10 +34,10 @@ module Editor =
             match model.Latest with
             | None -> None
             | Some (eid,v) ->
-                let t = sprintf "Latest  :  %-25s%A" (v :> obj |> string) eid // TODO: How do we do enum like Behaviour
+                let t = sprintf "Latest  :  %-25s%A" (string v) eid
                 match model.Previous with
                 | None -> Some t
-                | Some (eid,v) -> sprintf "%s\nPrevious:  %-25s%A" t (v :> obj |> string) eid |> Some
+                | Some (eid,v) -> sprintf "%s\nPrevious:  %-25s%A" t (string v) eid |> Some
         match model.Invalid, versioning with
         | Some i, Some v -> i+"\n\n"+v |> Some
         | Some i, None -> Some i

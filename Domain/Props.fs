@@ -4,6 +4,26 @@ open System
 open Lloyd.Core
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+module Kid =
+    let name = Property.create "Name" Kid.Name (function | Kid.Name n -> Some n | _ ->None)
+                        (fun s -> match Option.bind String.nonEmpty s with | Some s -> Ok s | None -> Error(Kid.Name "Kid name unknown" ,"Please enter a name"))
+    let age = Property.create "Age" Age (function | Age a -> Some a | _ ->None)
+                        (function | Some a when a>=0uy && a<=16uy -> Ok a | _ -> Error(Age 0uy,"Please enter age (0-16)"))
+    let behaviour = Property.create "Behaviour" Behaviour (function | Behaviour b -> Some b | _ ->None)
+                        (function | Some b -> Ok b | None -> Error(Behaviour Good,"Please enter behaviour"))
+    let wishList = Property.create "Wish List" WishList (function |WishList w -> Some w |_->None)
+                        (function | Some w -> Ok w | None -> failwith "Not possible")
+
+    type Summary = {Name:string; Age:Age; Behaviour:Behaviour; WishList:Toy ID Set}
+
+    let view events =
+        Ok  (fun n a b w -> {Name=n; Age=a; Behaviour=b; WishList=w})
+        <*> Property.getAndValidate name events
+        <*> Property.getAndValidate age events
+        <*> Property.getAndValidate behaviour events
+        <*> (Property.tryGetEvents wishList events |> Option.map SetEvent.toSet |> Option.getElse Set.empty |> Ok)
+
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module Toy =
     let name = Property.create "Name" Toy.Name (function | Toy.Name n -> Some n | _ -> None)
                         (fun s -> match Option.bind String.nonEmpty s with | Some s -> Ok s | None -> Error(Toy.Name "Toy name unknown" ,"Please enter a name"))
@@ -37,26 +57,6 @@ module Elf =
         <*> Property.getAndValidate workRate events
         <*> Property.getAndValidate making events
 
-[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module Kid =
-    let name = Property.create "Name" Kid.Name (function | Kid.Name n -> Some n | _ ->None)
-                        (fun s -> match Option.bind String.nonEmpty s with | Some s -> Ok s | None -> Error(Kid.Name "Kid name unknown" ,"Please enter a name"))
-    let age = Property.create "Age" Age (function | Age a -> Some a | _ ->None)
-                        (function | Some a when a>=0uy && a<=16uy -> Ok a | _ -> Error(Age 0uy,"Please enter age (0-16)"))
-    let behaviour = Property.create "Behaviour" Behaviour (function | Behaviour b -> Some b | _ ->None)
-                        (function | Some b -> Ok b | None -> Error(Behaviour Good,"Please enter behaviour"))
-    let wishList = Property.create "Wish List" WishList (function |WishList w -> Some w |_->None)
-                        (function | Some w -> Ok w | None -> failwith "Not possible")
-
-    type Summary = {Name:string; Age:Age; Behaviour:Behaviour; WishList:Toy ID Set}
-
-    let view events =
-        Ok  (fun n a b w -> {Name=n; Age=a; Behaviour=b; WishList=w})
-        <*> Property.getAndValidate name events
-        <*> Property.getAndValidate age events
-        <*> Property.getAndValidate behaviour events
-        <*> (Property.tryGetEvents wishList events |> Option.map SetEvent.toSet |> Option.getElse Set.empty |> Ok)
-
 
 
 module Query =
@@ -64,7 +64,7 @@ module Query =
     let toyProgress (kidStore:Kid Store) (toyStore:Toy Store) (elfStore:Elf Store) =
 
         let toyFinished (elfStore:Elf Store) =
-            Store.deltaObservable elfStore
+            Store.observable elfStore
             |> Observable.choose (Map.choose (fun _ -> Property.tryGetEvents Elf.making) >> Option.ofMap)
             |> Observable.scan (fun ((total,making),_) (map:Map<Elf ID,Toy ID option Events>) ->
                     let newTotal =
@@ -77,7 +77,7 @@ module Query =
             |> Observable.map snd
 
         let kidWishListEvent (kidStore:Kid Store) : IObservable<Map<Kid ID,Map<Toy ID,EventID>>> =
-            Store.deltaObservable kidStore
+            Store.observable kidStore
             |> Observable.choose (fun (map:Map<Kid ID,Kid Events>) ->
                 Map.toList map
                 |> List.choose (fun (kid,events) ->

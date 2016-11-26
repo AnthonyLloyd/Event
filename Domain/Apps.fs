@@ -104,7 +104,7 @@ module KidEdit =
             ToyName, Property.fullObservable Toy.name toyStore |> Observable.map ToyNames
             ToyAgeRange, Property.fullObservable Toy.ageRange toyStore |> Observable.map ToyAgeRanges
         ]
-        |> Option.cons (Option.map (fun kid -> Kid kid, Store.deltaObservable kidStore |> Observable.choose (Map.tryFind kid >> Option.map Update)) model.ID)
+        |> Option.cons (Option.map (fun kid -> Kid kid, Store.observable kidStore |> Observable.choose (Map.tryFind kid >> Option.map Update)) model.ID)
         |> Map.ofList
 
     let view model =
@@ -196,7 +196,7 @@ module ToyEdit =
 
     let subscription toyStore model =
         Option.map (fun toy ->
-            Toy toy, Store.deltaObservable toyStore |> Observable.choose (Map.tryFind toy >> Option.map Update)
+            Toy toy, Store.observable toyStore |> Observable.choose (Map.tryFind toy >> Option.map Update)
             ) model.ID
         |> Option.toList |> Map.ofList
 
@@ -285,7 +285,7 @@ module ElfEdit =
 
     let subscription elfStore toyStore model =
         [(ToyName, Property.fullObservable Toy.name toyStore |> Observable.map ToyNames)]
-        |> Option.cons (Option.map (fun elf -> Elf elf, Store.deltaObservable elfStore |> Observable.choose (Map.tryFind elf >> Option.map Update)) model.ID)
+        |> Option.cons (Option.map (fun elf -> Elf elf, Store.observable elfStore |> Observable.choose (Map.tryFind elf >> Option.map Update)) model.ID)
         |> Map.ofList
 
     let view model =
@@ -480,7 +480,7 @@ module ElfList =
     let subscription elfStore toyStore =
         let subs =
             Map.ofList [
-                ElfUpdate, Store.deltaObservable elfStore |> Observable.map Update
+                ElfUpdate, Store.observable elfStore |> Observable.map Update
                 ToyName, Property.fullObservable Toy.name toyStore |> Observable.map ToyNames
             ]
         fun (_:Model) -> subs
