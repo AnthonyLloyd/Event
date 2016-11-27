@@ -1,4 +1,5 @@
-﻿namespace Lloyd.Core
+﻿
+namespace Lloyd.Core
 
 open System
 open System.Threading
@@ -20,6 +21,12 @@ module Result =
         | Error f, Ok _ -> Error f
         | Ok _, Error f -> Error [f]
         | Error f1, Error f2 -> Error (f2::f1)
+    let append (r1:Result<'a list,'c list>) (r2:Result<'a list,'c list>) =
+        match r1,r2 with
+        | Ok l1, Ok l2 -> Ok (l1@l2)
+        | Error e1, Ok _ -> Error e1
+        | Ok _, Error e2 -> Error e2
+        | Error e1, Error e2 -> Error (e1@e2)
     let ofOption f o = match o with | None -> f() |> Error | Some v -> Ok v
     let toOption r = match r with | Ok o -> Some o | Error _ -> None
     let getElse v r = match r with | Ok o -> o | Error _ -> v
@@ -183,6 +190,7 @@ module Observable =
 [<AutoOpen>]
 module Common =
     let (<*>) = Result.apply
+    let (<+>) = Result.append
     let attempt = Result.AttemptBuilder()
     let maybe = Option.OptionBuilder()
     let rec atomicUpdate update state =

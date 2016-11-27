@@ -28,10 +28,10 @@ module KidEdit =
             SaveResponse: string
         }
         member m.Edits =
-            EditorSet.edit Kid.wishList m.WishList
-            |> Option.cons (Editor.edit Kid.name m.Name)
-            |> Option.cons (Editor.edit Kid.age m.Age)
-            |> Option.cons (Editor.edit Kid.behaviour m.Behaviour)
+            EditorSet.edit Kid.wishList m.WishList |> Ok
+            <+> Editor.edit Kid.name m.Name
+            <+> Editor.edit Kid.age m.Age
+            <+> Editor.edit Kid.behaviour m.Behaviour
 
     let init kid =
         {
@@ -77,6 +77,7 @@ module KidEdit =
             {model with Name=name; SaveValidation=valid; SaveResponse=String.empty}, []
         | AgeMsg a ->
             let age, valid = Editor.updateAndValidate Kid.age (Kid.view>>Result.map ignore) model.Age model.Latest model.Edits a
+            printfn "%A\n%A" age valid
             {model with Age=age; SaveValidation=valid; SaveResponse=String.empty}, []
         | BehaviourMsg b ->
             let beh, valid = Editor.updateAndValidate Kid.behaviour (Kid.view>>Result.map ignore) model.Behaviour model.Latest model.Edits b
@@ -84,7 +85,8 @@ module KidEdit =
         | WishListMsg w -> {model with WishList=EditorSet.update w model.WishList; SaveResponse=String.empty}, []
         | Save ->
             let cmd =
-                List1.tryOfList model.Edits
+                Result.toOption model.Edits
+                |> Option.bind List1.tryOfList
                 |> Option.map (addSnd (model.ID, model.Latest))
                 |> Option.toList
             (if List.isEmpty cmd then model else {model with SaveResponse="Saving..."}), cmd
@@ -138,9 +140,9 @@ module ToyEdit =
             SaveResponse: string
         }
         member m.Edits =
-            Option.toList (Editor.edit Toy.name m.Name)
-            |> Option.cons (Editor.edit Toy.ageRange m.AgeRange)
-            |> Option.cons (Editor.edit Toy.workRequired m.WorkRequired)
+            Editor.edit Toy.name m.Name
+            <+> Editor.edit Toy.ageRange m.AgeRange
+            <+> Editor.edit Toy.workRequired m.WorkRequired
 
     let init toy =
         {
@@ -182,9 +184,10 @@ module ToyEdit =
         | WorkMsg w ->
             let work, valid = Editor.updateAndValidate Toy.workRequired (Toy.view>>Result.map ignore) model.WorkRequired model.Latest model.Edits w
             {model with WorkRequired=work; SaveValidation=valid; SaveResponse=String.empty}, []
-        | Save -> model, List1.tryOfList model.Edits
-                            |> Option.map (addSnd (model.ID, model.Latest))
-                            |> Option.toList
+        | Save -> model, Result.toOption model.Edits
+                         |> Option.bind List1.tryOfList
+                         |> Option.map (addSnd (model.ID, model.Latest))
+                         |> Option.toList
         | CreateResult (Ok toy) -> {model with ID=Some toy; SaveResponse="Saved"}, []
         | UpdateResult (Ok _) -> {model with SaveResponse="Saved"}, []
         | CreateResult (Error StoreError.Concurrency)
@@ -228,8 +231,8 @@ module ElfEdit =
             SaveResponse: string
         }
         member m.Edits =
-            Option.toList (Editor.edit Elf.name m.Name)
-            |> Option.cons (Editor.edit Elf.workRate m.WorkRate)
+            Editor.edit Elf.name m.Name
+            <+> Editor.edit Elf.workRate m.WorkRate
 
     let init elf =
         {
@@ -270,9 +273,10 @@ module ElfEdit =
         | WorkRateMsg w ->
             let work, valid = Editor.updateAndValidate Elf.workRate (Elf.view>>Result.map ignore) model.WorkRate model.Latest model.Edits w
             {model with WorkRate=work; SaveValidation=valid; SaveResponse=String.empty}, []
-        | Save -> model, List1.tryOfList model.Edits
-                            |> Option.map (addSnd (model.ID, model.Latest))
-                            |> Option.toList
+        | Save -> model, Result.toOption model.Edits
+                         |> Option.bind List1.tryOfList
+                         |> Option.map (addSnd (model.ID, model.Latest))
+                         |> Option.toList
         | CreateResult (Ok toy) -> {model with ID=Some toy; SaveResponse="Saved"}, []
         | UpdateResult (Ok _) -> {model with SaveResponse="Saved"}, []
         | CreateResult (Error StoreError.Concurrency)

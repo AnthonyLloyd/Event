@@ -59,9 +59,6 @@ module Editor =
         | None -> model
         | Some events -> update (Update events) model
 
-    let validate property model =
-        {model with Invalid = Option.bind (fun e -> match property.Validation e with | Ok _ -> None | Error (_,s) -> Some s) model.Edit}
-
     let updateAndValidate property validator model latest edits msg =
         let model = update msg model
         match model.Edit with
@@ -71,14 +68,18 @@ module Editor =
             | Ok _ -> {model with Invalid=None}, Property.validateEdit validator latest edits
             | Error (k,v) ->
                 let validation =
-                    Property.validateEdit validator latest edits
-                    |> Result.mapError (fun l -> if List.exists (fst>>(=)k) l then l else (k,v)::l)
+                    match Property.validateEdit validator latest edits with
+                    | Ok _ -> Error [k,v]
+                    | Error l -> if List.exists (fst>>(=)k) l then Error l else (k,v)::l |> Error
                 {model with Invalid=Some v}, validation
 
     let edit property model =
         match model.Edit with
-        | Some (Some b) -> Property.set property b |> Some
-        | _ -> None
+        | Some b ->
+            Property.validate property b
+            |> Result.map (Property.set property >> List.singleton)
+            |> Result.mapError List.singleton
+        | None -> Ok []
 
 module EditorSet =
 

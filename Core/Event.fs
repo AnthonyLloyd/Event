@@ -180,16 +180,17 @@ module Property =
         get property updates |> property.Validation
     let validate (property:Property<'a,'b>) (edit:'b option) =
         property.Validation edit
-    let validateEdit (view:'a Events -> Result<'b,('a*string) list>) (current:'a Events option) (edits:'a list) =
-        match List1.tryOfList edits with
-        | None -> Error []
-        | Some l ->
-            let update = EventID.gen (User -1), l
+    let validateEdit (view:'a Events -> Result<'b,('a*string) list>) (current:'a Events option) (edits:Result<'a list,('a*string) list>) =
+        match edits with
+        | Error e -> Error e
+        | Ok [] -> Error []
+        | Ok (x::xs) ->
+            let update = EventID.gen (User -1), List1.init x xs
             let proposed =
                 match current with
                 | None -> List1.singleton update
                 | Some events -> List1.cons update events
-            view proposed
+            view proposed |> Result.map ignore
     let deltaObservable property store =
         Store.observable store
         |> Observable.choose (Map.choose (fun _ -> get property) >> Option.ofMap)
